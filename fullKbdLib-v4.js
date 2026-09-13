@@ -1,5 +1,5 @@
 /*
- * MoodleMathKeyboard V3
+ * MoodleMathKeyboard V4
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -3585,7 +3585,7 @@ MoodleMathKeyboard.prototype.buildMainPanel = function () {
         });
     }
 
-    this.makeCommaButton(row, COMMA_SYMBOL);
+    this.makeCommaButton(row, COMMA_SYMBOL); 
 
     this.makeTextButton(row, "DEL", "Delete left", function () {
         self.deleteLeft();
