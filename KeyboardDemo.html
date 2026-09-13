@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Full Keyboard V2 Test</title>
+<script>
+window.MathJax = {
+    loader: {
+        load: ["[tex]/html"]
+    },
+    tex: {
+        packages: {
+            "[+]": ["html"]
+        },
+        inlineMath: [["\\(", "\\)"]]
+    },
+    svg: {
+        fontCache: "global"
+    }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<script src="https://lomdot.education.gov.il/mathhatab/vkeyboard/fullKbdLib-v4.js"></script>
+</head>
+<body>
+<h1>Virtual Keyboard Demo (v4)</h1>
+<div id="keyboardHost"></div>
+<p>LaTeX: <input id="latexValue" type="text" size="80" readonly dir="ltr"></p>
+<pre id="astValue" dir="ltr"></pre>
+<script>
+function keyboardChanged(result) {
+   // document.getElementById("latexValue").value = result.latex;
+  //  document.getElementById("astValue").textContent = JSON.stringify(result.ast, null, 2);
+}
+let keyboard = new MoodleMathKeyboard({
+    divId: "keyboardHost",
+    complexNumbers: true,
+    enableEquals: true,
+    multiplicationSymbol: "cdot",
+    showImplicitMultiply: true,
+    language: "he", 
+    variables: [
+        { id: "x", label: "x", latex: "x" },
+        { id: "y", label: "y", latex: "y" },
+        { id: "z", label: "z", latex: "z" },
+        { id: "alpha", label: "α", latex: "\\alpha" }
+    ],
+    physicalKeyboard: true,
+    acceptLowercaseVariables: true,
+    acceptUppercaseVariables: true,
+    functions: {
+        logarithmic: true,
+        trigonometric: true,
+        inverseTrigonometric: true,
+        hyperbolic: false,
+        inverseHyperbolic: false,
+        namedFunction: true
+    },
+    structures: {
+        integral: true,
+        summation: true,
+        product: true,
+        limit: true,
+        sets: true, 
+        absoluteValue: true,
+        vector:true,
+        derivative: true,
+        partialDerivative: false
+    },
+   symbols: {
+        general: true,
+        relations: true,
+        logic: true,
+        geometry: true
+    },
+    withUnits: true,
+    unitCategories: {
+        length: true,
+        area: true,
+        volume: true,
+        time: true,
+        speed: true,
+        acceleration: true,
+        angle: true
+    },
+    debug: false,
+    onChange: keyboardChanged
+});
+</script>
+</body>
+</html>
