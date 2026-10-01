@@ -59,6 +59,7 @@ let DEFAULT_CONFIG = {
         inequalities: true,
         logic: true
     },
+    unitCategories: null,   // null = all unit groups; else { length: true, time: true, ... }
     getValueFunc: null,
     setValueFunc: null,
     onChange: null
@@ -1831,18 +1832,7 @@ MoodleMathKeyboard.prototype.applyPrime = function() {
         return;
     }
 };
-MoodleMathKeyboard.prototype.canApplyPrime = function () {
-    if (!this.normalizeCursorToSequence()) return false;
 
-    let seq = this.currentSequence();
-    if (!seq || this.cursor.offset <= 0) return false;
-
-    let previous = seq.items[this.cursor.offset - 1];
-
-    return previous.type === "variable" ||
-           previous.type === "prime" ||
-           previous.type === "namedFunction";
-};
 
 /* ============================================================
    STRUCTURES
@@ -2641,17 +2631,6 @@ MoodleMathKeyboard.prototype.cursorLatexForSequence = function (seq, offset) {
     return "";
 };
 
-MoodleMathKeyboard.prototype.renderNumber = function (node, editing) {
-    if (!editing || this.cursor.textNodeId !== node.id) {
-        return node.text;
-    }
-
-    let left = node.text.substring(0, this.cursor.charOffset);
-    let right = node.text.substring(this.cursor.charOffset);
-
-    return left +  this.cursorMarkerLatex() + right;
-};
-
 MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCursor = false) {
     let out = "";
     let rule = SYNTAX_RULES[seq.syntax];
@@ -3010,39 +2989,7 @@ MoodleMathKeyboard.prototype.semanticNode = function (node) {
         type: node.type
     };
 };
-MoodleMathKeyboard.prototype.getVectorName = function(node) {
-    let result = "";
-    let i;
 
-    if (!node || node.type !== "variableName") {
-        return "";
-    }
-
-    let seq = node.variable;
-
-    if (!seq) {
-        return "";
-    }
-
-    for (i = 0; i < seq.items.length; i += 1) {
-        if (seq.items[i].type === "variable") {
-            result += seq.items[i].name || seq.items[i].id || "";
-        }
-    }
-
-    if (node.subscript) {
-        return {
-            type: "indexedVariable",
-            variable: {
-                type: "variable",
-                name: result
-            },
-            subscript: this.semanticSequence(node.subscript)
-        };
-    }
-
-    return result;
-};
 MoodleMathKeyboard.prototype.semanticSequence = function(seq) {
     let result = [];
     let rule = SYNTAX_RULES[seq.syntax];
@@ -3903,6 +3850,19 @@ MoodleMathKeyboard.prototype.makeClearUnitButton = function(parent) {
     return button;
 };
 
+/*
+ * unitCategories: { length: true, time: true, ... }
+ * A group is shown if its own name or its category name is true.
+ * Missing / null unitCategories -> show everything.
+ */
+MoodleMathKeyboard.prototype.isUnitGroupEnabled = function(categoryName, groupName) {
+    let filter = this.config.unitCategories;
+
+    if (!filter) return true;
+
+    return filter[groupName] === true || filter[categoryName] === true;
+};
+
 MoodleMathKeyboard.prototype.buildUnitsPanel = function(body) {
     let categoryName;
     let groupName;
@@ -3919,14 +3879,22 @@ MoodleMathKeyboard.prototype.buildUnitsPanel = function(body) {
 
         category = UNIT_GROUPS[categoryName];
 
-        let categoryTitle = document.createElement("div");
-        categoryTitle.textContent = this.getLocalizedText(category.title);
-        categoryTitle.style.fontWeight = "bold";
-        categoryTitle.style.marginTop = "6px";
-        body.appendChild(categoryTitle);
+        let categoryTitle = null;
 
         for (groupName in category.groups) {
             if (!Object.prototype.hasOwnProperty.call(category.groups, groupName)) continue;
+            if (!this.isUnitGroupEnabled(categoryName, groupName)) continue;
+
+            /*
+             * Category title only once, and only if it has a visible group.
+             */
+            if (!categoryTitle) {
+                categoryTitle = document.createElement("div");
+                categoryTitle.textContent = this.getLocalizedText(category.title);
+                categoryTitle.style.fontWeight = "bold";
+                categoryTitle.style.marginTop = "6px";
+                body.appendChild(categoryTitle);
+            }
 
             group = category.groups[groupName];
 
@@ -3969,10 +3937,6 @@ MoodleMathKeyboard.prototype.makeUnitButton = function(parent, unit) {
     return button;
 };
 
-MoodleMathKeyboard.prototype.toggleUnitsPanel = function() {
-    if (!this.unitPanel) return;
-    this.unitPanel.style.display = this.unitPanel.style.display === "none" ? "block" : "none";
-};
 MoodleMathKeyboard.prototype.selectUnit = function(unit) {
     this.unitValue = unit.value;
     this.unitScale = unit.scale;
@@ -4136,31 +4100,7 @@ MoodleMathKeyboard.prototype.nodeBeforeCursor = function() {
 
     return seq.items[this.cursor.offset - 1];
 };
-MoodleMathKeyboard.prototype.getSymbolDefinitionByOperator = function (op) {
-    let groupName;
-    let group;
-    let i;
-    let symbol;
 
-    for (groupName in SYMBOL_GROUPS) {
-        if (!Object.prototype.hasOwnProperty.call(SYMBOL_GROUPS, groupName)) continue;
-
-        group = SYMBOL_GROUPS[groupName];
-
-        for (i = 0; i < group.symbols.length; i += 1) {
-            symbol = group.symbols[i];
-
-            if (symbol.type === "operator" && symbol.op === op) {
-                return symbol;
-            }
-            if (symbol.type === "separator" && symbol.operator === op) {
-                return symbol;
-            }
-        }
-    }
-
-    return null;
-};
 MoodleMathKeyboard.prototype.sequenceCharCount = function(seq) {
     let count = 0;
     let i;
