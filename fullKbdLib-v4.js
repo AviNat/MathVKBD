@@ -842,6 +842,18 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
     let rule = SYNTAX_RULES[syntax];
 
     if (!rule) return true;
+
+    /*
+     * The exponent of scientific notation (×10^n) holds only an integer.
+     * Any other action (+, ·, (, π, a variable ...) once the exponent has
+     * digits leaves the exponent first and is then checked after the
+     * ×10^n node - no need to press the right arrow.
+     */
+    if ((rule.allow.indexOf(actionType) < 0 || (rule.validate && !rule.validate(this, actionType))) &&
+        actionType !== "decimal" && this.exitScientificExponent()) {
+        return this.syntaxAllows(actionType);
+    }
+
     if (rule.allow.indexOf(actionType) < 0) return false;
     if (rule.validate && !rule.validate(this, actionType)) return false;
 
@@ -857,6 +869,28 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
             return false;
         }
     }
+    return true;
+};
+/*
+ * If the cursor is in the exponent of a scientific-notation node and the
+ * exponent already has at least one digit, put the cursor right after the
+ * node. Returns true when the cursor was moved.
+ */
+MoodleMathKeyboard.prototype.exitScientificExponent = function() {
+    /* While typing digits the cursor is inside the number node, not in the sequence. */
+    let seq = this.currentOrContainingSequence();
+    if (!seq || seq.syntax !== "signedInteger") return false;
+
+    let slot = this.findParent(this.editorAST, seq.id);
+    if (!slot || slot.parent.type !== "scientific" || slot.key !== "exponent") return false;
+
+    let hasDigit = seq.items.some(function (item) { return item.type === "number"; });
+    if (!hasDigit) return false;
+
+    let outer = this.findParent(this.editorAST, slot.parent.id);
+    if (!outer || outer.parent.type !== "sequence" || outer.key !== "items") return false;
+
+    this.cursor = { seqId: outer.parent.id, offset: outer.index + 1, textNodeId: null, charOffset: null };
     return true;
 };
 MoodleMathKeyboard.prototype.getNamedFunctionFromNameSlot = function() {
@@ -4696,7 +4730,14 @@ let NODE_DEFS = {
             }
         },
 
-        render: "#coefficient#\\!\\!\\times\\!\\!10^{#exponent#}",
+        /*
+         * Condensed so the number reads as one unit, with the same tightness
+         * at every size: {\times} is an ordinary symbol (TeX adds no space
+         * around it), and \mkern-2mu pulls each side in, scaled to the size.
+         * (The previous "\!\!\times\!\!" relied on the binary-operator space,
+         * which TeX drops in fractions, so the × overlapped there.)
+         */
+        render: "#coefficient#\\mkern-2mu{\\times}\\mkern-2mu10^{#exponent#}",
 
         semantic: {
             type: "scientific"
