@@ -22,6 +22,7 @@ let DEFAULT_CONFIG = {
     debug: false,
     complexNumbers: true,
     enableEquals: true,
+    sets: true,
     multiplicationSymbol: "cdot",
     implicitMultiply: true,
     showImplicitMultiply: true,
@@ -47,7 +48,6 @@ let DEFAULT_CONFIG = {
         limit: true,
         absoluteValue: true,
         vector:true,
-        allowComplex:true,
         derivative: true,
         partialDerivative: true
     },
@@ -1172,6 +1172,7 @@ MoodleMathKeyboard.prototype.insertGroup = function () {
 
 };
 MoodleMathKeyboard.prototype.insertSet = function() {
+    if (!this.config.sets) return;      // also blocks the "{" physical key
     if (!this.syntaxAllows("set")) return;
 
     let content = this.makeSequence([], "setContent");
@@ -3526,7 +3527,7 @@ MoodleMathKeyboard.prototype.buildMainPanel = function () {
         self.insertGroup();
     });
 
-    if (this.config.structures.sets) {
+    if (this.config.sets) {
         this.makeButton(row, "\\left\\{\\square\\right\\}", "Set", function() {
             self.insertSet();
         });
@@ -5254,13 +5255,25 @@ let SYMBOL_GROUPS = {
                 type: "symbol"
             },
             {
+                id: "integers",
+                latex: "\\mathbb{Z} ",
+                title: "Integers",
+                type: "symbol"
+            },
+            {
+                id: "rationalNumbers",
+                latex: "\\mathbb{Q} ",
+                title: "Rational numbers",
+                type: "symbol"
+            },
+            {
                 id: "realNumbers",
                 latex: "\\mathbb{R} ",
                 title: "Real numbers",
                 type: "symbol"
             },
             {
-                id: "realNumbers",
+                id: "complexNumbers",
                 latex: "\\mathbb{C} ",
                 title: "Complex numbers",
                 type: "symbol"
