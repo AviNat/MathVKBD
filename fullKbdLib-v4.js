@@ -490,9 +490,7 @@ MoodleMathKeyboard.prototype.getPlaceholderInfo = function(seq) {
 
     let def = this.getNodeDefinition(parentInfo.parent);
 
-    if (!def ||
-        !def.children ||
-        !def.children[parentInfo.key]) {
+    if (!def || !def.children || !def.children[parentInfo.key]) {
         return null;
     }
 
@@ -527,14 +525,9 @@ MoodleMathKeyboard.prototype.placeholderLatex = function(seq) {
         return "\\square";
     }
 
-    let id =
-        this.cursorMarkerId +
-        "Placeholder" +
-        seq.id;
+    let id = this.cursorMarkerId + "Placeholder" + seq.id;
 
-    return "\\square\\cssId{" +
-        id +
-        "}{\\vphantom{X}}";
+    return "\\square\\cssId{" + id + "}{\\vphantom{X}}";
 };
 MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, right) {
     if ( !this.config.showImplicitMultiply ) return false;
@@ -573,8 +566,7 @@ MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, righ
         "vector"
     ];
 
-    if (leftTypes.indexOf(left.type) < 0 ||
-        rightTypes.indexOf(right.type) < 0) {
+    if (leftTypes.indexOf(left.type) < 0 || rightTypes.indexOf(right.type) < 0) {
         return false;
     }
 
@@ -582,9 +574,7 @@ MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, righ
         return false;
     }
 
-    if (left.type === "variable" &&
-        right.type === "number" &&
-        left.allowDigitSuffix) {
+    if (left.type === "variable" && right.type === "number" && left.allowDigitSuffix) {
         return false;
     }
 
@@ -747,20 +737,11 @@ MoodleMathKeyboard.prototype.buildCursorMap = function () {
         let current = map[j];
         let duplicate = false;
 
-        if (previous.textNodeId !== null &&
-            current.seqId !== null) {
+        if (previous.textNodeId !== null && current.seqId !== null) {
 
-            let numberNode =
-                self.findNode(
-                    self.editorAST,
-                    previous.textNodeId
-                );
+            let numberNode = self.findNode(self.editorAST, previous.textNodeId);
 
-            let parentInfo =
-                self.findParent(
-                    self.editorAST,
-                    previous.textNodeId
-                );
+            let parentInfo = self.findParent(self.editorAST, previous.textNodeId);
 
             if (numberNode &&
                 parentInfo &&
@@ -782,18 +763,14 @@ MoodleMathKeyboard.prototype.buildCursorMap = function () {
 };
 MoodleMathKeyboard.prototype.cursorEquals = function (a, b) {
     return a.seqId === b.seqId &&
-           a.offset === b.offset &&
-           a.textNodeId === b.textNodeId &&
-           a.charOffset === b.charOffset;
+           a.offset === b.offset && a.textNodeId === b.textNodeId && a.charOffset === b.charOffset;
 };
 MoodleMathKeyboard.prototype.moveCursor = function (delta) {
 
     if (delta > 0) {
-        let context =
-            this.getNamedFunctionCursorContext();
+        let context = this.getNamedFunctionCursorContext();
 
-        if (context &&
-            context.state === "AFTER_NAME") {
+        if (context && context.state === "AFTER_NAME") {
 
             this.cursor = {
                 seqId: context.functionNode.argument.id,
@@ -844,24 +821,29 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
     if (!rule) return true;
 
     /*
-     * The exponent of scientific notation (×10^n) holds only an integer.
-     * Any other action (+, ·, (, π, a variable ...) once the exponent has
-     * digits leaves the exponent first and is then checked after the
-     * ×10^n node - no need to press the right arrow.
+     * Auto exit (rule.autoExit): an action this slot does not accept, typed
+     * after the slot has content, moves the cursor to the next slot of the
+     * structure (cursor.order in NODE_DEFS) or after the structure, and is
+     * tried there:  3/4 +  ->  3/4 + ;  ⁿ√ 3 x  ->  ∛x ;  3×10^5 π  ->  3×10^5 π.
+     * If it is not accepted there either, the cursor goes back: nothing changes.
      */
-    if ((rule.allow.indexOf(actionType) < 0 || (rule.validate && !rule.validate(this, actionType))) &&
-        actionType !== "decimal" && this.exitScientificExponent()) {
-        return this.syntaxAllows(actionType);
-    }
+    if (rule.allow.indexOf(actionType) < 0 || (rule.validate && !rule.validate(this, actionType))) {
+        if (rule.autoExit && (rule.autoExitExcept || []).indexOf(actionType) < 0) {
+            let saved = this.cursor;
 
-    if (rule.allow.indexOf(actionType) < 0) return false;
-    if (rule.validate && !rule.validate(this, actionType)) return false;
+            if (this.autoExitSlot()) {
+                if (this.syntaxAllows(actionType)) return true;
+                this.cursor = saved;
+            }
+        }
+
+        return false;
+    }
 
     let actionRule = ACTION_RULES[actionType];
     if (actionRule && actionRule.validate && !actionRule.validate(this, actionType)) return false;
 
-    if (rule.maxChars !== undefined &&
-        (actionType === "variable" || actionType === "digit")) {
+    if (rule.maxChars !== undefined && (actionType === "variable" || actionType === "digit")) {
 
         let seq = this.currentOrContainingSequence();
 
@@ -872,22 +854,39 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
     return true;
 };
 /*
- * If the cursor is in the exponent of a scientific-notation node and the
- * exponent already has at least one digit, put the cursor right after the
- * node. Returns true when the cursor was moved.
+ * Auto exit (used by syntaxAllows for rules with autoExit): move the cursor
+ * to the start of the next slot of the current structure, in the slot order
+ * of NODE_DEFS (cursor.order), or right after the structure from its last
+ * slot. Only once the slot has content - an operator alone (a sign) does not
+ * count - so an empty slot is never left behind.
+ * Returns true when the cursor was moved.
  */
-MoodleMathKeyboard.prototype.exitScientificExponent = function() {
+MoodleMathKeyboard.prototype.autoExitSlot = function() {
     /* While typing digits the cursor is inside the number node, not in the sequence. */
     let seq = this.currentOrContainingSequence();
-    if (!seq || seq.syntax !== "signedInteger") return false;
+    if (!seq) return false;
+
+    let hasContent = seq.items.some(function (item) { return item.type !== "operator"; });
+    if (!hasContent) return false;
 
     let slot = this.findParent(this.editorAST, seq.id);
-    if (!slot || slot.parent.type !== "scientific" || slot.key !== "exponent") return false;
+    if (!slot) return false;
 
-    let hasDigit = seq.items.some(function (item) { return item.type === "number"; });
-    if (!hasDigit) return false;
+    let structure = slot.parent;
+    let slots = [];
 
-    let outer = this.findParent(this.editorAST, slot.parent.id);
+    this.forEachCursorChild(structure, function (child) {
+        if (child && child.type === "sequence") slots.push(child);
+    });
+
+    let index = slots.indexOf(seq);
+
+    if (index >= 0 && index + 1 < slots.length) {
+        this.cursor = { seqId: slots[index + 1].id, offset: 0, textNodeId: null, charOffset: null };
+        return true;
+    }
+
+    let outer = this.findParent(this.editorAST, structure.id);
     if (!outer || outer.parent.type !== "sequence" || outer.key !== "items") return false;
 
     this.cursor = { seqId: outer.parent.id, offset: outer.index + 1, textNodeId: null, charOffset: null };
@@ -902,26 +901,19 @@ MoodleMathKeyboard.prototype.getNamedFunctionFromNameSlot = function() {
 
     let info = this.findParent(this.editorAST, seq.id);
 
-    if (!info ||
-        !info.parent ||
-        info.parent.type !== "variableName") {
+    if (!info || !info.parent || info.parent.type !== "variableName") {
         return null;
     }
 
-    if (info.key !== "variable" &&
-        info.key !== "subscript") {
+    if (info.key !== "variable" && info.key !== "subscript") {
         return null;
     }
 
     let variableName = info.parent;
 
-    let parentInfo =
-        this.findParent(this.editorAST, variableName.id);
+    let parentInfo = this.findParent(this.editorAST, variableName.id);
 
-    if (!parentInfo ||
-        !parentInfo.parent ||
-        parentInfo.parent.type !== "namedFunction" ||
-        parentInfo.key !== "name") {
+    if (!parentInfo || !parentInfo.parent || parentInfo.parent.type !== "namedFunction" || parentInfo.key !== "name") {
         return null;
     }
 
@@ -997,8 +989,7 @@ MoodleMathKeyboard.prototype.insertDigit = function (digit) {
         return;
     }
 
-    if (syntax === "functionName" ||
-        syntax === "variableNamePart") {
+    if (syntax === "functionName" || syntax === "variableNamePart") {
 
         if (!this.syntaxAllows("digit")) return;
 
@@ -1017,9 +1008,7 @@ MoodleMathKeyboard.prototype.insertDigit = function (digit) {
         node = this.findNode(this.editorAST, this.cursor.textNodeId);
         if (node && node.type === "number") {
             node.text =
-                node.text.substring(0, this.cursor.charOffset) +
-                digit +
-                node.text.substring(this.cursor.charOffset);
+                node.text.substring(0, this.cursor.charOffset) + digit + node.text.substring(this.cursor.charOffset);
             this.cursor.charOffset += 1;
             this.changed();
             return;
@@ -1035,9 +1024,7 @@ MoodleMathKeyboard.prototype.insertDigit = function (digit) {
         previous = seq.items[this.cursor.offset - 1];
     }
 
-    if (previous &&
-        previous.type === "variable" &&
-        previous.allowDigitSuffix) {
+    if (previous && previous.type === "variable" && previous.allowDigitSuffix) {
 
         previous.name += digit;
         previous.latex += digit;
@@ -1080,17 +1067,13 @@ MoodleMathKeyboard.prototype.insertDecimal = function () {
 
     if (this.cursor.textNodeId !== null) {
         node = this.findNode(this.editorAST, this.cursor.textNodeId);
-        if (node &&
-            node.type === "number" &&
-            node.text.indexOf(".") < 0) {
+        if (node && node.type === "number" && node.text.indexOf(".") < 0) {
             if (this.cursor.charOffset === 0) {
                 node.text = "0." + node.text;
                 this.cursor.charOffset = 2;
             } else {
                 node.text =
-                    node.text.substring(0, this.cursor.charOffset) +
-                    "." +
-                    node.text.substring(this.cursor.charOffset);
+                    node.text.substring(0, this.cursor.charOffset) + "." + node.text.substring(this.cursor.charOffset);
                 this.cursor.charOffset += 1;
             }
             this.changed();
@@ -1101,9 +1084,7 @@ MoodleMathKeyboard.prototype.insertDecimal = function () {
     seq = this.currentSequence();
     if (this.cursor.offset > 0) {
         node = seq.items[this.cursor.offset - 1];
-        if (node &&
-            node.type === "number" &&
-            node.text.indexOf(".") < 0) {
+        if (node && node.type === "number" && node.text.indexOf(".") < 0) {
             node.text += ".";
             this.cursor = {
                 seqId: null,
@@ -1155,8 +1136,7 @@ MoodleMathKeyboard.prototype.insertOperator = function(op, explicit) {
 MoodleMathKeyboard.prototype.insertVariable = function(def, typed) {
     if (!this.syntaxAllows("variable")) return;
 
-    if (this.currentSyntax() === "functionName" ||
-        this.currentSyntax() === "variableNamePart") {
+    if (this.currentSyntax() === "functionName" || this.currentSyntax() === "variableNamePart") {
 
         if (this.insertIntoSequence({
             id: this.newId(),
@@ -1313,10 +1293,7 @@ MoodleMathKeyboard.prototype.insertSubscript = function () {
     if (seq.syntax === "variableNamePart") {
         let info = this.findParent(this.editorAST, seq.id);
 
-        if (!info ||
-            !info.parent ||
-            info.parent.type !== "variableName" ||
-            info.key !== "variable") {
+        if (!info || !info.parent || info.parent.type !== "variableName" || info.key !== "variable") {
             return;
         }
 
@@ -1324,8 +1301,7 @@ MoodleMathKeyboard.prototype.insertSubscript = function () {
 
         if (variableName.subscript) return;
 
-        variableName.subscript =
-            this.makeSequence([], "subscript");
+        variableName.subscript = this.makeSequence([], "subscript");
 
         this.cursor = {
             seqId: variableName.subscript.id,
@@ -1434,9 +1410,7 @@ MoodleMathKeyboard.prototype.insertSimpleFraction = function () {
         previous = seq.items[this.cursor.offset - 1];
     }
 
-    if (previous &&
-        previous.type === "number" &&
-        previous.text.indexOf(".") < 0) {
+    if (previous && previous.type === "number" && previous.text.indexOf(".") < 0) {
 
         seq.items.splice(this.cursor.offset - 1, 1);
         this.cursor.offset -= 1;
@@ -1567,20 +1541,17 @@ MoodleMathKeyboard.prototype.exitIndexedVariableSubscript = function() {
     let slotInfo = this.findParent(this.editorAST, seq.id);
     if (!slotInfo) return false;
 
-    if (slotInfo.parent.type !== "indexedVariable" ||
-        slotInfo.key !== "subscript") {
+    if (slotInfo.parent.type !== "indexedVariable" || slotInfo.key !== "subscript") {
         return false;
     }
 
     let indexedVariable = slotInfo.parent;
 
-    let parentInfo =
-        this.findParent(this.editorAST, indexedVariable.id);
+    let parentInfo = this.findParent(this.editorAST, indexedVariable.id);
 
     if (!parentInfo) return false;
 
-    if (parentInfo.parent.type !== "sequence" ||
-        parentInfo.key !== "items") {
+    if (parentInfo.parent.type !== "sequence" || parentInfo.key !== "items") {
         return false;
     }
 
@@ -1617,8 +1588,7 @@ MoodleMathKeyboard.prototype.insertNamedFunction = function() {
 
         if (candidate) {
 
-            if (candidate.nameNode &&
-                candidate.nameNode.type === "indexedVariable") {
+            if (candidate.nameNode && candidate.nameNode.type === "indexedVariable") {
 
                 name = {
                     id: this.newId(),
@@ -1649,8 +1619,7 @@ MoodleMathKeyboard.prototype.insertNamedFunction = function() {
         }
     }
 
-    let argument =
-        this.makeSequence([], "expression");
+    let argument = this.makeSequence([], "expression");
 
     let node = {
         id: this.newId(),
@@ -1752,10 +1721,7 @@ MoodleMathKeyboard.prototype.deleteFunctionNameModifier = function(seq) {
 
     let info = this.findParent(this.editorAST, seq.id);
 
-    if (!info ||
-        !info.parent ||
-        info.parent.type !== "namedFunction" ||
-        info.key !== "name") {
+    if (!info || !info.parent || info.parent.type !== "namedFunction" || info.key !== "name") {
         return false;
     }
 
@@ -2122,8 +2088,7 @@ MoodleMathKeyboard.prototype.deletePreviousChainSeparator = function () {
 
         let current = this.editorAST.elements[i];
 
-        if (current.items.length !== 0 ||
-            this.cursor.offset !== 0) {
+        if (current.items.length !== 0 || this.cursor.offset !== 0) {
             return false;
         }
 
@@ -2187,8 +2152,7 @@ MoodleMathKeyboard.prototype.deleteLeft = function () {
         node = this.findNode(this.editorAST, this.cursor.textNodeId);
         if (node && node.type === "number" && this.cursor.charOffset > 0) {
             node.text =
-                node.text.substring(0, this.cursor.charOffset - 1) +
-                node.text.substring(this.cursor.charOffset);
+                node.text.substring(0, this.cursor.charOffset - 1) + node.text.substring(this.cursor.charOffset);
             this.cursor.charOffset -= 1;
             if (node.text.length === 0) {
                 parentInfo = this.findParent(this.editorAST, node.id);
@@ -2346,14 +2310,12 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
             return this.deleteStructureNode( parentInfo.parent );
         }
     }
-    if (structure.type === "indexedVariable" &&
-        slotInfo.key === "subscript") {
+    if (structure.type === "indexedVariable" && slotInfo.key === "subscript") {
 
         let parentInfo = this.findParent(this.editorAST, structure.id);
         if (!parentInfo) return false;
 
-        if (parentInfo.parent.type !== "sequence" ||
-            parentInfo.key !== "items") {
+        if (parentInfo.parent.type !== "sequence" || parentInfo.key !== "items") {
             return false;
         }
 
@@ -2372,18 +2334,15 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
     if (structure.type === "fraction" && slotInfo.key === "numerator") {
         return this.deleteStructureNode(structure);
     }
-    if (structure.type === "simpleFraction" &&
-        slotInfo.key === "numerator") {
+    if (structure.type === "simpleFraction" && slotInfo.key === "numerator") {
         return this.deleteStructureNode(structure);
     }
-    if (structure.type === "mixedFraction" &&
-        slotInfo.key === "numerator") {
+    if (structure.type === "mixedFraction" && slotInfo.key === "numerator") {
 
         let parentInfo = this.findParent(this.editorAST, structure.id);
         if (!parentInfo) return false;
 
-        if (parentInfo.parent.type !== "sequence" ||
-            parentInfo.key !== "items") {
+        if (parentInfo.parent.type !== "sequence" || parentInfo.key !== "items") {
             return false;
         }
 
@@ -2430,35 +2389,27 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
             return true;
         }
     }
-    if (structure.type === "variableName" &&
-        slotInfo.key === "variable" &&
-        seq.items.length === 0) {
+    if (structure.type === "variableName" && slotInfo.key === "variable" && seq.items.length === 0) {
 
         let parentInfo = this.findParent(this.editorAST, structure.id);
 
-        if (parentInfo &&
-            parentInfo.parent.type === "vector" &&
-            parentInfo.key === "name") {
+        if (parentInfo && parentInfo.parent.type === "vector" && parentInfo.key === "name") {
 
             return this.deleteStructureNode(parentInfo.parent);
         }
     }
-    if (structure.type === "scientific" &&
-        slotInfo.key === "exponent") {
+    if (structure.type === "scientific" && slotInfo.key === "exponent") {
 
-        let parentInfo =
-            this.findParent(this.editorAST, structure.id);
+        let parentInfo = this.findParent(this.editorAST, structure.id);
 
         if (!parentInfo) return false;
 
-        if (parentInfo.parent.type !== "sequence" ||
-            parentInfo.key !== "items") {
+        if (parentInfo.parent.type !== "sequence" || parentInfo.key !== "items") {
             return false;
         }
 
         if (structure.coefficientFromPrevious) {
-            parentInfo.parent.items[parentInfo.index] =
-                structure.coefficient;
+            parentInfo.parent.items[parentInfo.index] = structure.coefficient;
 
             this.cursor = {
                 seqId: parentInfo.parent.id,
@@ -2496,8 +2447,7 @@ MoodleMathKeyboard.prototype.deleteStructureNode = function (node) {
     let parentInfo = this.findParent(this.editorAST, node.id);
     if (!parentInfo) return false;
 
-    if (parentInfo.parent.type !== "sequence" ||
-        parentInfo.key !== "items") {
+    if (parentInfo.parent.type !== "sequence" || parentInfo.key !== "items") {
         return false;
     }
 
@@ -2519,8 +2469,7 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
 
     if (!seq) return null;
 
-    let info =
-        this.findParent(this.editorAST, seq.id);
+    let info = this.findParent(this.editorAST, seq.id);
 
     if (!info || !info.parent) {
         return null;
@@ -2529,8 +2478,7 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
     /*
      * Cursor in the argument.
      */
-    if (info.parent.type === "namedFunction" &&
-        info.key === "argument") {
+    if (info.parent.type === "namedFunction" && info.key === "argument") {
 
         return {
             functionNode: info.parent,
@@ -2548,11 +2496,7 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
 
     let variableName = info.parent;
 
-    let functionInfo =
-        this.findParent(
-            this.editorAST,
-            variableName.id
-        );
+    let functionInfo = this.findParent(this.editorAST, variableName.id);
 
     if (!functionInfo ||
         !functionInfo.parent ||
@@ -2562,8 +2506,7 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
         return null;
     }
 
-    let functionNode =
-        functionInfo.parent;
+    let functionNode = functionInfo.parent;
 
     /*
      * Base function-name sequence.
@@ -2609,9 +2552,7 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
      */
     if (info.key === "subscript") {
 
-        if (this.cursor.offset === seq.items.length &&
-            (functionNode.primeOrder > 0 ||
-             functionNode.inverseFunction)) {
+        if (this.cursor.offset === seq.items.length && (functionNode.primeOrder > 0 || functionNode.inverseFunction)) {
 
             return {
                 functionNode: functionNode,
@@ -2702,10 +2643,7 @@ MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCur
 
         let item = seq.items[i];
 
-        if (!suppressCursor &&
-            editing &&
-            item.type === "number" &&
-            this.cursor.textNodeId === item.id) {
+        if (!suppressCursor && editing && item.type === "number" && this.cursor.textNodeId === item.id) {
 
             out += item.text.substring(0, this.cursor.charOffset);
             out += this.cursorMarkerLatex();
@@ -2755,30 +2693,20 @@ MoodleMathKeyboard.prototype.showPlaceholderTooltip = function(marker, text) {
 
     let tooltipRect = tooltip.getBoundingClientRect();
 
-    let left =
-        rect.left +
-        rect.width / 2 -
-        tooltipRect.width / 2;
+    let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
 
-    let top =
-        rect.top -
-        tooltipRect.height -
-        6;
+    let top = rect.top - tooltipRect.height - 6;
 
     if (left < 4) {
         left = 4;
     }
 
     if (left + tooltipRect.width > window.innerWidth - 4) {
-        left =
-            window.innerWidth -
-            tooltipRect.width -
-            4;
+        left = window.innerWidth - tooltipRect.width - 4;
     }
 
     if (top < 4) {
-        top =
-            rect.bottom + 6;
+        top = rect.bottom + 6;
     }
 
     tooltip.style.left = left + "px";
@@ -2801,8 +2729,7 @@ MoodleMathKeyboard.prototype.installPlaceholderTooltips = function() {
         if (!node) return;
 
         if (node.type === "sequence") {
-            if (node.items.length === 0 &&
-                !self.isRootSequence(node)) {
+            if (node.items.length === 0 && !self.isRootSequence(node)) {
 
                 let info = self.getPlaceholderInfo(node);
 
@@ -2829,10 +2756,7 @@ MoodleMathKeyboard.prototype.installPlaceholderTooltips = function() {
             if (text && square) {
                 let box = square.getBBox();
 
-                let hitRect = document.createElementNS(
-                    "http://www.w3.org/2000/svg",
-                    "rect"
-                );
+                let hitRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
 
                 hitRect.setAttribute("x", box.x);
                 hitRect.setAttribute("y", box.y);
@@ -2849,10 +2773,7 @@ MoodleMathKeyboard.prototype.installPlaceholderTooltips = function() {
                 hitRect.addEventListener(
                     "mouseenter",
                     function() {
-                        self.showPlaceholderTooltip(
-                            square,
-                            text
-                        );
+                        self.showPlaceholderTooltip(square, text);
                     }
                 );
 
@@ -2928,9 +2849,7 @@ MoodleMathKeyboard.prototype.renderDerivative = function(node, editing) {
     return "\\frac{" + d + exponent + "}{" + d + variable + exponent + "}" + expression;
 };
 MoodleMathKeyboard.prototype.isSingleVariableSequence = function(seq) {
-    return !!seq &&
-        seq.items.length === 1 &&
-        seq.items[0].type === "variable";
+    return !!seq && seq.items.length === 1 && seq.items[0].type === "variable";
 };
 MoodleMathKeyboard.prototype.getLatex = function () {
     let parts = [];
@@ -2952,8 +2871,7 @@ MoodleMathKeyboard.prototype.getEditingLatex = function () {
    SEMANTIC AST
    ============================================================ */
 
-MoodleMathKeyboard.prototype.semanticFromDefinition =
-function(node, def) {
+MoodleMathKeyboard.prototype.semanticFromDefinition = function(node, def) {
     let semanticDef = def.semantic;
     let result = {};
     let key;
@@ -2968,8 +2886,7 @@ function(node, def) {
         for (key in semanticDef.values) {
             if (!semanticDef.values.hasOwnProperty(key)) continue;
 
-            result[key] =
-                semanticDef.values[key];
+            result[key] = semanticDef.values[key];
         }
     }
 
@@ -2977,8 +2894,7 @@ function(node, def) {
         for (key in semanticDef.copy) {
             if (!semanticDef.copy.hasOwnProperty(key)) continue;
 
-            result[key] =
-                node[semanticDef.copy[key]];
+            result[key] = node[semanticDef.copy[key]];
         }
     }
 
@@ -3047,9 +2963,7 @@ MoodleMathKeyboard.prototype.semanticSequence = function(seq) {
             });
         }
 
-        result.push(
-            this.semanticNode(seq.items[i])
-        );
+        result.push(this.semanticNode(seq.items[i]));
     }
 
     if (result.length === 0) return null;
@@ -3060,8 +2974,7 @@ MoodleMathKeyboard.prototype.semanticSequence = function(seq) {
         items: result
     };
 };
-MoodleMathKeyboard.prototype.renderFromDefinition =
-function(node, editing, def) {
+MoodleMathKeyboard.prototype.renderFromDefinition = function(node, editing, def) {
 
     let result = def.render;
     let key;
@@ -3096,9 +3009,7 @@ MoodleMathKeyboard.prototype.currentSyntax = function () {
         let node = this.findNode(this.editorAST, this.cursor.textNodeId);
         let parent = this.findParent(this.editorAST, node.id);
 
-        if (parent &&
-            parent.parent &&
-            parent.parent.type === "sequence") {
+        if (parent && parent.parent && parent.parent.type === "sequence") {
             return parent.parent.syntax || "expression";
         }
     }
@@ -3122,9 +3033,7 @@ MoodleMathKeyboard.prototype.getAST = function () {
     };
     let i;
     for (i = 0; i < this.editorAST.elements.length; i += 1) {
-        result.elements.push(
-            this.semanticSequence(this.editorAST.elements[i])
-        );
+        result.elements.push(this.semanticSequence(this.editorAST.elements[i]));
     }
     return result;
 };
@@ -3161,9 +3070,7 @@ MoodleMathKeyboard.prototype.setMathLabel = function (button, latex) {
 };
 MoodleMathKeyboard.prototype.typesetButtons = function (root) {
     let buttons = root.querySelectorAll("button[data-math-label]");
-    if (!window.MathJax ||
-        !window.MathJax.typesetPromise ||
-        buttons.length === 0) {
+    if (!window.MathJax || !window.MathJax.typesetPromise || buttons.length === 0) {
         return;
     }
     window.MathJax.typesetPromise(
@@ -3278,10 +3185,7 @@ MoodleMathKeyboard.prototype.makePanel = function(name) {
 MoodleMathKeyboard.prototype.init = function () {
     let host = document.getElementById(this.config.divId);
     if (!host) {
-        throw new Error(
-            "MoodleMathKeyboard: container not found: " +
-            this.config.divId
-        );
+        throw new Error("MoodleMathKeyboard: container not found: " + this.config.divId);
     }
     this.root = document.createElement("div");
     this.root.style.position = "relative";
@@ -3581,12 +3485,7 @@ MoodleMathKeyboard.prototype.buildMainPanel = function () {
     table.style.marginTop = "2px";
     table.style.margin = "2px auto 0 auto";
     this.mainPanel.appendChild(table);
-    let rows = [
-        ["7", "8", "9", "/"],
-        ["4", "5", "6", "*"],
-        ["1", "2", "3", "-"],
-        ["0", ".", "SCI", "+"]
-    ];
+    let rows = [["7", "8", "9", "/"], ["4", "5", "6", "*"], ["1", "2", "3", "-"], ["0", ".", "SCI", "+"]];
     let r;
     let c;
     for (r = 0; r < rows.length; r += 1) {
@@ -4210,8 +4109,7 @@ MoodleMathKeyboard.prototype.forEachCursorChild = function(node, callback) {
 
         if (!childDef.cursor) continue;
 
-        if (childDef.cursor.condition &&
-            !childDef.cursor.condition(node, this)) {
+        if (childDef.cursor.condition && !childDef.cursor.condition(node, this)) {
             continue;
         }
 
@@ -4391,8 +4289,7 @@ let NODE_DEFS = {
             for (i = 0; i < node.content.items.length; i += 1) {
                 item = node.content.items[i];
 
-                if (item.type === "separator" &&
-                    item.separator === "comma") {
+                if (item.type === "separator" && item.separator === "comma") {
                     hasComma = true;
                     break;
                 }
@@ -4682,9 +4579,7 @@ let NODE_DEFS = {
                 placeholder: function(node, kbd) {
                     let parentInfo = kbd.findParent(kbd.editorAST, node.id);
 
-                    if (parentInfo &&
-                        parentInfo.parent &&
-                        parentInfo.parent.type === "namedFunction") {
+                    if (parentInfo && parentInfo.parent && parentInfo.parent.type === "namedFunction") {
                         return PLACEHOLDER_ID.FUNCTION_NAME;
                     }
 
@@ -4822,30 +4717,18 @@ let NODE_DEFS = {
         render: function(kbd, node, editing) {
 
             if (node.fixedExponent) {
-                return "{" +
-                    kbd.renderNode(node.base, editing) +
-                    "}^{" +
-                    node.fixedExponent +
-                    "}";
+                return "{" + kbd.renderNode(node.base, editing) + "}^{" + node.fixedExponent + "}";
             }
 
-            if (node.base &&
-                node.base.type === "function" &&
-                !node.base.inverseBase) {
+            if (node.base && node.base.type === "function" && !node.base.inverseBase) {
 
                 return node.base.latexName +
                     "^{" +
                     kbd.renderSequence(node.exponent, editing) +
-                    "}\\left(" +
-                    kbd.renderSequence(node.base.argument, editing) +
-                    "\\right)";
+                    "}\\left(" + kbd.renderSequence(node.base.argument, editing) + "\\right)";
             }
 
-            return "{" +
-                kbd.renderNode(node.base, editing) +
-                "}^{" +
-                kbd.renderSequence(node.exponent, editing) +
-                "}";
+            return "{" + kbd.renderNode(node.base, editing) + "}^{" + kbd.renderSequence(node.exponent, editing) + "}";
         },
 
         semantic: function(kbd, node) {
@@ -4895,16 +4778,10 @@ let NODE_DEFS = {
         render: function(kbd, node, editing) {
 
             if (node.inverseBase) {
-                return node.inverseBase +
-                    "^{-1}\\left(" +
-                    kbd.renderSequence(node.argument, editing) +
-                    "\\right)";
+                return node.inverseBase + "^{-1}\\left(" + kbd.renderSequence(node.argument, editing) + "\\right)";
             }
 
-            return node.latexName +
-                "\\left(" +
-                kbd.renderSequence(node.argument, editing) +
-                "\\right)";
+            return node.latexName + "\\left(" + kbd.renderSequence(node.argument, editing) + "\\right)";
         },
 
         semantic: {
@@ -4962,10 +4839,7 @@ render: function(kbd, node, editing) {
         context = kbd.getNamedFunctionCursorContext();
     }
 
-    let cursorAfterName =
-        context &&
-        context.functionNode === node &&
-        context.state === "AFTER_NAME";
+    let cursorAfterName = context && context.functionNode === node && context.state === "AFTER_NAME";
 
     let name;
 
@@ -5038,24 +4912,17 @@ render: function(kbd, node, editing) {
             let lower = kbd.renderSequence(node.lower, editing);
             let upper = kbd.renderSequence(node.upper, editing);
 
-            if (!editing &&
-                node.lower.items.length === 0 &&
-                node.upper.items.length === 0) {
+            if (!editing && node.lower.items.length === 0 && node.upper.items.length === 0) {
 
                 return "\\int " +
-                    kbd.renderSequence(node.integrand, editing) +
-                    "\\,d" +
-                    kbd.renderSequence(node.variable, editing);
+                    kbd.renderSequence(node.integrand, editing) + "\\,d" + kbd.renderSequence(node.variable, editing);
             }
 
             return "\\int_{" +
                 lower +
                 "}^{" +
                 upper +
-                "}" +
-                kbd.renderSequence(node.integrand, editing) +
-                "\\,d" +
-                kbd.renderSequence(node.variable, editing);
+                "}" + kbd.renderSequence(node.integrand, editing) + "\\,d" + kbd.renderSequence(node.variable, editing);
         },
         semantic: {
         type: "integral"
@@ -5108,10 +4975,7 @@ render: function(kbd, node, editing) {
                 kbd.renderSequence(node.indexVariable, editing) +
                 "=" +
                 kbd.renderSequence(node.start, editing) +
-                "}^{" +
-                kbd.renderSequence(node.end, editing) +
-                "}" +
-                kbd.renderSequence(node.body, editing);
+                "}^{" + kbd.renderSequence(node.end, editing) + "}" + kbd.renderSequence(node.body, editing);
         },
         semantic: {
             typeFromProperty: "operator"
@@ -5150,17 +5014,13 @@ render: function(kbd, node, editing) {
     },
 
     render: function(kbd, node, editing) {
-        let direction =
-            kbd.renderSequence(node.direction, editing);
+        let direction = kbd.renderSequence(node.direction, editing);
 
         return "\\lim_{" +
             kbd.renderSequence(node.variable, editing) +
             "\\to {" +
             kbd.renderSequence(node.target, editing) +
-            "}" +
-            (direction ? "^{" + direction + "}" : "") +
-            "}" +
-            kbd.renderSequence(node.body, editing);
+            "}" + (direction ? "^{" + direction + "}" : "") + "}" + kbd.renderSequence(node.body, editing);
     },
 
     semantic: {
@@ -5212,8 +5072,7 @@ render: function(kbd, node, editing) {
         },
 
         render: function(kbd, node, editing) {
-            return kbd.renderNode(node.value, editing) +
-                new Array(node.order + 1).join("'");
+            return kbd.renderNode(node.value, editing) + new Array(node.order + 1).join("'");
         },
 
         semantic: {
@@ -5479,8 +5338,15 @@ let SYNTAX_RULES = {
         implicitMultiply: true
     },
 
+    /*
+     * autoExit: a not-allowed action typed after the slot has content moves to
+     * the next slot / out of the structure and is applied there (see syntaxAllows).
+     * autoExitExcept: actions that are just ignored instead (3/4. makes no sense).
+     */
     natural: { allow: ["digit"],
-        valueType: VALUE_TYPE.NATURAL
+        valueType: VALUE_TYPE.NATURAL,
+        autoExit: true,
+        autoExitExcept: ["decimal"]
      },
     setContent: { allow: ["comma", "digit","decimal","variable","constant","plus","minus","additive",
         "multiply","divide","group","sqrt","nthRoot","fixedExponent","power","simpleFraction","function",
@@ -5519,14 +5385,11 @@ let SYNTAX_RULES = {
             if (!seq) return false;
 
             if (action === "variable") {
-                return seq.items.length === 0 ||
-                    (seq.items.length === 1 &&
-                    seq.items[0].type === "variable");
+                return seq.items.length === 0 || (seq.items.length === 1 && seq.items[0].type === "variable");
             }
 
             if (action === "subscript") {
-                return seq.items.length === 1 &&
-                    seq.items[0].type === "variable";
+                return seq.items.length === 1 && seq.items[0].type === "variable";
             }
 
             return false;
@@ -5579,6 +5442,8 @@ let SYNTAX_RULES = {
     signedInteger: {
         allow: ["digit","plus","minus"],
         valueType: VALUE_TYPE.INTEGER,
+        autoExit: true,
+        autoExitExcept: ["decimal"],
         validate: function(kbd, action) {
             if (action === "digit") return true;
             let seq = kbd.currentSequence();
@@ -5704,14 +5569,11 @@ MoodleMathKeyboard.prototype.handlePhysicalKey = function(event) {
     /*
      * Letters
      */
-    else if (key.length === 1 &&
-        ((key >= "a" && key <= "z") ||
-         (key >= "A" && key <= "Z"))) {
+    else if (key.length === 1 && ((key >= "a" && key <= "z") || (key >= "A" && key <= "Z"))) {
 
         variable = this.findVariableForKey(key);
 
-        if (!variable &&
-            this.config.acceptLowercaseVariables) {
+        if (!variable && this.config.acceptLowercaseVariables) {
 
             variable = {
                 id: key,
@@ -5729,12 +5591,7 @@ MoodleMathKeyboard.prototype.handlePhysicalKey = function(event) {
     /*
      * Data-driven physical-key actions.
      */
-    else if (
-        Object.prototype.hasOwnProperty.call(
-            PHYSICAL_KEY_ACTIONS,
-            key
-        )
-    ) {
+    else if (Object.prototype.hasOwnProperty.call(PHYSICAL_KEY_ACTIONS, key)) {
         action = PHYSICAL_KEY_ACTIONS[key];
 
         /*
@@ -5746,10 +5603,7 @@ MoodleMathKeyboard.prototype.handlePhysicalKey = function(event) {
          */
         if (Array.isArray(action)) {
             if (action.length > 0) {
-                this[action[0]].apply(
-                    this,
-                    action.slice(1)
-                );
+                this[action[0]].apply(this, action.slice(1));
             }
         } else {
             this[action]();
@@ -6121,8 +5975,7 @@ MoodleMathKeyboard.prototype.render = function (ast) {
         this.debugAST.textContent =
             "Semantic AST:\n" +
             JSON.stringify(ast || this.getAST(), null, 2) +
-            "\n\nEditor AST:\n" +
-            JSON.stringify(this.getEditorAST(), null, 2);
+            "\n\nEditor AST:\n" + JSON.stringify(this.getEditorAST(), null, 2);
     }
 
     if (!window.MathJax || !window.MathJax.typesetPromise) {
