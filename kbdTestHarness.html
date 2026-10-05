@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FullKBD automated tests</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 16px; color: #222; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    #summary { font-size: 16px; margin: 8px 0 12px; }
+    #summary .pass { color: #1a7f37; font-weight: bold; }
+    #summary .fail { color: #c62828; font-weight: bold; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .toolbar button { padding: 4px 10px; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; text-align: left; }
+    th { background: #f2f2f2; position: sticky; top: 0; }
+    tr.group td { background: #e8eef7; font-weight: bold; }
+    tr.failed td { background: #fdecea; }
+    td.status { font-weight: bold; text-align: center; white-space: nowrap; }
+    tr.passed td.status { color: #1a7f37; }
+    tr.failed td.status { color: #c62828; }
+    td.code { font-family: Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+    td.math { font-size: 16px; min-width: 140px; }
+    body.only-failed tr.passed { display: none; }
+    #copyArea { width: 100%; height: 120px; font-family: Consolas, monospace; display: none; margin-top: 8px; }
+    #host { position: absolute; left: -10000px; top: 0; width: 600px; }
+</style>
+</head>
+<body>
+
+<h1>FullKBD automated tests</h1>
+<div>
+    Each test types keys through the keyboard's internal API and compares the semantic tree (<code>getAST()</code>)
+    with a reference. The expression column shows the editor with the cursor (|) so you can check the reference by eye.
+    Test cases and the key notation are in <code>kbdTests.js</code>.
+</div>
+
+<div id="summary">Running…</div>
+
+<div class="toolbar">
+    <label><input type="checkbox" id="onlyFailed"> Show failed tests only</label>
+    <button type="button" id="rerun">Run again</button>
+    <button type="button" id="copyActual">Copy actual results of failed tests</button>
+</div>
+<textarea id="copyArea" readonly></textarea>
+
+<table>
+    <thead>
+        <tr><th>#</th><th>Test</th><th>Keys</th><th>Expression (with cursor)</th><th>Expected</th><th>Actual</th><th>Result</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+</table>
+
+<div id="host"></div>
+
+<script src="fullKbdLib-v4.js"></script>
+<script src="kbdTests.js"></script>
+<script>
+(function () {
+    "use strict";
+
+    let results = [];
+
+    function cell(row, text, className) {
+        let td = document.createElement("td");
+        td.textContent = text;
+        if (className) td.className = className;
+        row.appendChild(td);
+        return td;
+    }
+
+    function render() {
+        let body = document.getElementById("results");
+        let passed = results.filter(function (r) { return r.pass; }).length;
+        let failed = results.length - passed;
+        let lastGroup = null;
+
+        body.innerHTML = "";
+
+        results.forEach(function (r, index) {
+            let row;
+
+            if (r.testCase.group !== lastGroup) {
+                lastGroup = r.testCase.group;
+                row = document.createElement("tr");
+                row.className = "group";
+                cell(row, lastGroup).colSpan = 7;
+                body.appendChild(row);
+            }
+
+            row = document.createElement("tr");
+            row.className = r.pass ? "passed" : "failed";
+            cell(row, String(index + 1));
+            cell(row, r.testCase.name);
+            cell(row, r.testCase.keys, "code");
+            cell(row, r.editingLatex ? "\\(" + r.editingLatex + "\\)" : "", "math");
+            cell(row, r.testCase.expect, "code");
+            cell(row, r.error ? "ERROR: " + r.error : r.actual, "code");
+            cell(row, r.pass ? "PASS" : "FAIL", "status");
+            body.appendChild(row);
+        });
+
+        document.getElementById("summary").innerHTML =
+            "<span class='pass'>" + passed + " passed</span>, " +
+            "<span class='" + (failed ? "fail" : "pass") + "'>" + failed + " failed</span> of " + results.length +
+            " tests";
+
+        typeset();
+    }
+
+    function typeset() {
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetClear && MathJax.typesetClear([document.getElementById("results")]);
+            MathJax.typesetPromise([document.getElementById("results")]);
+        }
+    }
+
+    function runTests() {
+        results = KbdTests.run(window.MoodleMathKeyboard, document.getElementById("host"));
+        render();
+    }
+
+    /*
+     * The tests run before MathJax is loaded, so the keyboards do not typeset
+     * their buttons; MathJax is loaded afterwards only to render the results.
+     */
+    function loadMathJax() {
+        window.MathJax = {
+            tex: { inlineMath: [["\\(", "\\)"]] },
+            startup: { typeset: false, ready: function () { MathJax.startup.defaultReady(); typeset(); } }
+        };
+        let script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
+        document.head.appendChild(script);
+    }
+
+    document.getElementById("onlyFailed").onchange = function () {
+        document.body.classList.toggle("only-failed", this.checked);
+    };
+
+    document.getElementById("rerun").onclick = runTests;
+
+    /* Paste these lines over the matching cases in kbdTests.js after checking them */
+    document.getElementById("copyActual").onclick = function () {
+        let area = document.getElementById("copyArea");
+        let lines = results.filter(function (r) { return !r.pass && !r.error; }).map(function (r) {
+            return "    { group: " + JSON.stringify(r.testCase.group) +
+                ", name: " + JSON.stringify(r.testCase.name) +
+                ", keys: " + JSON.stringify(r.testCase.keys) +
+                (r.testCase.config ? ", config: " + JSON.stringify(r.testCase.config) : "") +
+                ", expect: " + JSON.stringify(r.actual) + " },";
+        });
+
+        area.value = lines.length ? lines.join("\n") : "(no failed tests)";
+        area.style.display = "block";
+        area.select();
+
+        if (navigator.clipboard) navigator.clipboard.writeText(area.value).catch(function () {});
+    };
+
+    runTests();
+    loadMathJax();
+})();
+</script>
+</body>
+</html>

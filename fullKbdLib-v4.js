@@ -43,11 +43,12 @@ let DEFAULT_CONFIG = {
     },
     structures: {
         integral: true,
+        evaluation: true,       // F(x)|_a^b - value of an integral between bounds
         summation: true,
         product: true,
         limit: true,
         absoluteValue: true,
-        vector:true,
+        vector: "arrow",        // "none" | "arrow" | "underline" | "both" (two buttons); true = "arrow"
         derivative: true,
         partialDerivative: true
     },
@@ -370,6 +371,100 @@ PLACEHOLDER_VALUE_TEXT.ar[PLACEHOLDER_ID.ABSOLUTE_CONTENT] = "تعبير جبر�
 PLACEHOLDER_VALUE_TEXT.en[PLACEHOLDER_ID.CONJUGATE_CONTENT] = "Algebraic expression";
 PLACEHOLDER_VALUE_TEXT.he[PLACEHOLDER_ID.CONJUGATE_CONTENT] = "ביטוי אלגברי";
 PLACEHOLDER_VALUE_TEXT.ar[PLACEHOLDER_ID.CONJUGATE_CONTENT] = "تعبير جبري";
+
+/*
+ * Button tooltips, keyed by the English title used in the code.
+ * Key labels are never localized - only tooltips (see getLocalizedText).
+ */
+let TOOLTIP_TEXT = {
+    "Power": { he: "חזקה", ar: "قوة" },
+    "Square": { he: "ריבוע", ar: "تربيع" },
+    "Reciprocal": { he: "הופכי", ar: "مقلوب" },
+    "Square root": { he: "שורש ריבועי", ar: "جذر تربيعي" },
+    "Nth root": { he: "שורש מסדר n", ar: "جذر نوني" },
+    "Subscript": { he: "אינדקס תחתון", ar: "رمز سفلي" },
+    "Pi": { he: "פאי", ar: "باي" },
+    "Variables and constants": { he: "משתנים וקבועים", ar: "متغيرات وثوابت" },
+    "Functions": { he: "פונקציות", ar: "دوال" },
+    "Structures": { he: "מבנים", ar: "بنى" },
+    "Symbols": { he: "סמלים", ar: "رموز" },
+    "Select units": { he: "בחירת יחידות", ar: "اختيار الوحدات" },
+    "Fraction / mixed fraction": { he: "שבר / מספר מעורב", ar: "كسر / عدد كسري" },
+    "Parentheses": { he: "סוגריים", ar: "أقواس" },
+    "Set": { he: "קבוצה", ar: "مجموعة" },
+    "Delete left": { he: "מחיקה שמאלה", ar: "حذف إلى اليسار" },
+    "Clear all": { he: "ניקוי הכול", ar: "مسح الكل" },
+    "Move left": { he: "הזזה שמאלה", ar: "تحريك إلى اليسار" },
+    "Move right": { he: "הזזה ימינה", ar: "تحريك إلى اليمين" },
+    "Equals / next chain element": { he: "שווה / האיבר הבא בשרשרת", ar: "يساوي / العنصر التالي في السلسلة" },
+    "Decimal point": { he: "נקודה עשרונית", ar: "فاصلة عشرية" },
+    "Multiply": { he: "כפל", ar: "ضرب" },
+    "Minus": { he: "מינוס", ar: "ناقص" },
+    "Plus": { he: "פלוס", ar: "زائد" },
+    "Scientific notation": { he: "כתיב מדעי", ar: "الصيغة العلمية" },
+    "Imaginary unit": { he: "היחידה המדומה", ar: "الوحدة التخيلية" },
+    "Euler's number": { he: "המספר e (אוילר)", ar: "عدد أويلر" },
+    "Natural logarithm": { he: "לוגריתם טבעי", ar: "اللوغاريتم الطبيعي" },
+    "Base 10 logarithm": { he: "לוגריתם לפי בסיס 10", ar: "اللوغاريتم العشري" },
+    "Arbitrary-base logarithm": { he: "לוגריתם לפי בסיס כלשהו", ar: "لوغاريتم بأساس اختياري" },
+    "Sine": { he: "סינוס", ar: "جيب" },
+    "Cosine": { he: "קוסינוס", ar: "جيب التمام" },
+    "Tangent": { he: "טנגנס", ar: "ظل" },
+    "Inverse sine": { he: "ארקסינוס", ar: "الجيب العكسي" },
+    "Inverse cosine": { he: "ארקקוסינוס", ar: "جيب التمام العكسي" },
+    "Inverse tangent": { he: "ארקטנגנס", ar: "الظل العكسي" },
+    "Hyperbolic sine": { he: "סינוס היפרבולי", ar: "الجيب الزائدي" },
+    "Hyperbolic cosine": { he: "קוסינוס היפרבולי", ar: "جيب التمام الزائدي" },
+    "Hyperbolic tangent": { he: "טנגנס היפרבולי", ar: "الظل الزائدي" },
+    "Inverse hyperbolic sine": { he: "סינוס היפרבולי הפוך", ar: "الجيب الزائدي العكسي" },
+    "Inverse hyperbolic cosine": { he: "קוסינוס היפרבולי הפוך", ar: "جيب التمام الزائدي العكسي" },
+    "Inverse hyperbolic tangent": { he: "טנגנס היפרבולי הפוך", ar: "الظل الزائدي العكسي" },
+    "Named function": { he: "פונקציה עם שם", ar: "دالة مسماة" },
+    "Prime": { he: "תג (נגזרת)", ar: "شرطة (مشتقة)" },
+    "Absolute value": { he: "ערך מוחלט", ar: "القيمة المطلقة" },
+    "Integral": { he: "אינטגרל", ar: "تكامل" },
+    "Evaluate between bounds": { he: "הצבת גבולות", ar: "التعويض بين الحدين" },
+    "Summation": { he: "סכום", ar: "مجموع" },
+    "Product": { he: "מכפלה", ar: "جداء" },
+    "Limit": { he: "גבול", ar: "نهاية" },
+    "Vector (arrow)": { he: "וקטור (חץ)", ar: "متجه (سهم)" },
+    "Vector (underline)": { he: "וקטור (קו תחתון)", ar: "متجه (خط سفلي)" },
+    "Conjugate": { he: "צמוד", ar: "المرافق" },
+    "Derivative": { he: "נגזרת", ar: "مشتقة" },
+    "Partial derivative": { he: "נגזרת חלקית", ar: "مشتقة جزئية" },
+    "Open keyboard": { he: "פתיחת המקלדת", ar: "فتح لوحة المفاتيح" },
+    "Close": { he: "סגירה", ar: "إغلاق" },
+    "Comma": { he: "פסיק", ar: "فاصلة" },
+    "Infinity": { he: "אינסוף", ar: "ما لا نهاية" },
+    "Factorial": { he: "עצרת", ar: "عاملي" },
+    "Percent": { he: "אחוז", ar: "نسبة مئوية" },
+    "empty set": { he: "קבוצה ריקה", ar: "مجموعة خالية" },
+    "Approximately equal": { he: "שווה בקירוב", ar: "يساوي تقريبًا" },
+    "Plus or minus": { he: "פלוס מינוס", ar: "زائد أو ناقص" },
+    "Minus or plus": { he: "מינוס פלוס", ar: "ناقص أو زائد" },
+    "Natural numbers": { he: "מספרים טבעיים", ar: "الأعداد الطبيعية" },
+    "Integers": { he: "מספרים שלמים", ar: "الأعداد الصحيحة" },
+    "Rational numbers": { he: "מספרים רציונליים", ar: "الأعداد النسبية" },
+    "Real numbers": { he: "מספרים ממשיים", ar: "الأعداد الحقيقية" },
+    "Complex numbers": { he: "מספרים מרוכבים", ar: "الأعداد المركبة" },
+    "Less than": { he: "קטן מ-", ar: "أصغر من" },
+    "Less than or equal": { he: "קטן או שווה", ar: "أصغر من أو يساوي" },
+    "Greater than": { he: "גדול מ-", ar: "أكبر من" },
+    "Greater than or equal": { he: "גדול או שווה", ar: "أكبر من أو يساوي" },
+    "Not equal": { he: "שונה", ar: "لا يساوي" },
+    "For all": { he: "לכל", ar: "لكل" },
+    "Exists": { he: "קיים", ar: "يوجد" },
+    "Member of": { he: "שייך ל-", ar: "ينتمي إلى" },
+    "Not a member of": { he: "לא שייך ל-", ar: "لا ينتمي إلى" },
+    "Implies": { he: "גורר", ar: "يستلزم" },
+    "Degrees": { he: "מעלות", ar: "درجات" },
+    "Angle": { he: "זווית", ar: "زاوية" },
+    "Triangle": { he: "משולש", ar: "مثلث" },
+    "Congruent": { he: "חופף", ar: "متطابق" },
+    "Similar": { he: "דומה", ar: "متشابه" },
+    "Parallel": { he: "מקביל", ar: "يوازي" },
+    "Perpendicular": { he: "מאונך", ar: "عمودي على" }
+};
 /* ============================================================
    CONSTRUCTOR
    ============================================================ */
@@ -529,8 +624,8 @@ MoodleMathKeyboard.prototype.placeholderLatex = function(seq) {
 
     return "\\square\\cssId{" + id + "}{\\vphantom{X}}";
 };
+/* showImplicitMultiply is display only - it is checked by the renderer, not here, so it never changes the meaning */
 MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, right) {
-    if ( !this.config.showImplicitMultiply ) return false;
     if (!left || !right) return false;
 
     let leftTypes = [
@@ -547,7 +642,8 @@ MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, righ
         "function",
         "namedFunction",
         "absolute",
-        "vector"
+        "vector",
+        "evaluation"
     ];
 
     let rightTypes = [
@@ -563,7 +659,8 @@ MoodleMathKeyboard.prototype.editorNodesImplicitlyMultiply = function(left, righ
         "function",
         "namedFunction",
         "absolute",
-        "vector"
+        "vector",
+        "evaluation"
     ];
 
     if (leftTypes.indexOf(left.type) < 0 || rightTypes.indexOf(right.type) < 0) {
@@ -1047,6 +1144,19 @@ MoodleMathKeyboard.prototype.insertDigit = function (digit) {
             return;
         }
     }
+    /* right before a number: the digit joins it (5 typed before 12 gives 512, not 5·12) */
+    node = seq.items[this.cursor.offset];
+    if (node && node.type === "number") {
+        node.text = digit + node.text;
+        this.cursor = {
+            seqId: null,
+            offset: null,
+            textNodeId: node.id,
+            charOffset: 1
+        };
+        this.changed();
+        return;
+    }
     node = this.makeNumber(digit);
     seq.items.splice(this.cursor.offset, 0, node);
     this.cursor = {
@@ -1358,7 +1468,8 @@ MoodleMathKeyboard.prototype.insertPower = function() {
     this.changed();
 };
 
-MoodleMathKeyboard.prototype.insertVector = function() {
+/* notation: "arrow" (\vec{u}) or "underline" (\underline{u}) - display only */
+MoodleMathKeyboard.prototype.insertVector = function(notation) {
     if (!this.syntaxAllows("vector")) return;
 
     let variable = this.makeSequence([], "variableNamePart");
@@ -1373,6 +1484,7 @@ MoodleMathKeyboard.prototype.insertVector = function() {
     let node = {
         id: this.newId(),
         type: "vector",
+        notation: notation === "underline" ? "underline" : "arrow",
         name: name
     };
 
@@ -1873,6 +1985,35 @@ MoodleMathKeyboard.prototype.insertIntegral = function () {
         variable: variable
     }, lower);
 };
+/*
+ * Evaluation between bounds: F(x)|_a^b. lower/upper have the same meaning as
+ * the integral bounds. After an operand the operand becomes the base (x|_1^2
+ * means (x)|_1^2; typed parentheses are kept as the base). Where an expression
+ * is expected (empty, after an operator) an empty (□) base is created.
+ */
+MoodleMathKeyboard.prototype.insertEvaluation = function () {
+    if (!this.config.structures.evaluation) return;      // also blocks the "|" physical key
+    if (!this.syntaxAllows("evaluation")) return;
+
+    let base = this.takePreviousAsBase();
+    let groupContent = null;
+
+    if (!base) {
+        groupContent = this.makeSequence([], "parenthesesContent");
+        base = { id: this.newId(), type: "group", content: groupContent };
+    }
+
+    let lower = this.makeSequence([]);
+    let upper = this.makeSequence([]);
+
+    this.insertAndEnter({
+        id: this.newId(),
+        type: "evaluation",
+        base: base,
+        lower: lower,
+        upper: upper
+    }, groupContent || lower);
+};
 MoodleMathKeyboard.prototype.insertIndexedOperator = function (kind) {
     if (!this.syntaxAllows(kind)) return;
 
@@ -2284,7 +2425,19 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
         this.render();
         return true;
     }
-    if (structure.type === "group") return this.deleteStructureNode(structure);
+    if (structure.type === "evaluation" && slotInfo.key === "lower") {
+        if (this.isEmptyGroup(structure.base)) return this.deleteStructureNode(structure);
+        return this.deleteStructureNodeKeepBase(structure);
+    }
+    if (structure.type === "group") {
+        let groupParent = this.findParent(this.editorAST, structure.id);
+
+        /* the empty (□) base created with the evaluation bar: remove the whole structure */
+        if (groupParent && groupParent.parent.type === "evaluation" && groupParent.key === "base") {
+            return this.deleteStructureNode(groupParent.parent);
+        }
+        return this.deleteStructureNode(structure);
+    }
     if (structure.type === "function" && slotInfo.key === "argument") return this.deleteStructureNode(structure);
     if (structure.type === "namedFunction" && slotInfo.key === "argument") return this.deleteStructureNode(structure);
     if (structure.type === "nthRoot" && slotInfo.key === "index") return this.deleteStructureNode(structure);
@@ -2295,7 +2448,7 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
     if (structure.type === "set" && slotInfo.key === "content") {
         return this.deleteStructureNode(structure);
     }
-    if (structure.type === "sqrt" && slotInfo.key === "content") {
+    if (structure.type === "sqrt" && slotInfo.key === "argument") {
         return this.deleteStructureNode(structure);
     }
     if (structure.type === "variableName" && slotInfo.key === "variable" && seq.items.length === 0) {
@@ -2361,7 +2514,7 @@ MoodleMathKeyboard.prototype.deleteEmptyParentStructure = function (seq) {
     if (structure.type === "power" && slotInfo.key === "exponent" && !structure.fixedExponent) {
         return this.deleteStructureNodeKeepBase(structure);
     }
-    if (structure.type === "conjugate" && slotInfo.key === "content") {
+    if (structure.type === "conjugate" && slotInfo.key === "argument") {
         return this.deleteStructureNode(structure);
     }
     if (structure.type === "function" && slotInfo.key === "argument") {
@@ -2442,6 +2595,9 @@ MoodleMathKeyboard.prototype.deleteStructureNodeKeepBase = function(structure) {
     this.cursor = { seqId: parentInfo.parent.id, offset: parentInfo.index + 1, textNodeId: null, charOffset: null };
     this.changed();
     return true;
+};
+MoodleMathKeyboard.prototype.isEmptyGroup = function(node) {
+    return !!node && node.type === "group" && node.content.items.length === 0;
 };
 MoodleMathKeyboard.prototype.deleteStructureNode = function (node) {
     let parentInfo = this.findParent(this.editorAST, node.id);
@@ -2928,51 +3084,272 @@ MoodleMathKeyboard.prototype.semanticNode = function (node) {
 
     let def = this.getNodeDefinition(node);
 
+    let result;
+
     if (def && typeof def.semantic === "function") {
-        return def.semantic(this, node); 
+        result = def.semantic(this, node);
+    } else if (def && def.semantic) {
+        result = this.semanticFromDefinition(node, def);
+    } else {
+        result = { type: node.type };
     }
 
-    if (def && def.semantic) {
-        return this.semanticFromDefinition(node, def);
+    /* src: editor node ids, for highlighting (a group passes its content through, keeping the content's src) */
+    if (result && !result.src && node.id !== undefined) {
+        result.src = [node.id];
     }
 
-    return {
-        type: node.type
-    };
+    return result;
+};
+
+/* ============================================================
+   SEMANTIC TREE OF A SEQUENCE (operator precedence)
+
+   A sequence is a flat list of operands and operators. It is parsed into a
+   tree whose operations take any number of operands:
+       7+x+3y   ->  (+, 7, x, (*, 3, y))
+       a-b      ->  (+, a, (neg, b))        -ab  ->  (neg, (*, a, b))
+       a±b      ->  (plusMinus, a, b)       ±a   ->  (plusMinus, a)
+       3<x<5    ->  (and, (less, 3, x), (less, x, 5))
+       a,b      ->  list (a group with commas is a tuple, a set lists its elements)
+   Loosest first: comma, implies, or, and, relations, + - ± (binary),
+   * (explicit and implicit are the same), unary + - ±, operands.
+   A missing operand ("x+", "+") is {type: "missing"}.
+   ============================================================ */
+let SEMANTIC_OPERATOR_LEVEL = {
+    implies: "implies",
+    or: "or",
+    and: "and",
+    "+": "additive",
+    "-": "additive",
+    plusMinus: "additive",
+    minusPlus: "additive",
+    "*": "multiplicative"
+};
+
+MoodleMathKeyboard.prototype.semanticOperatorLevel = function(op) {
+    /* everything else (<, ≤, ≠, ∈, ≈, ∥ ...) is a relation */
+    return SEMANTIC_OPERATOR_LEVEL[op] || "relation";
 };
 
 MoodleMathKeyboard.prototype.semanticSequence = function(seq) {
-    let result = [];
+    let tokens = [];
     let rule = SYNTAX_RULES[seq.syntax];
     let i;
+    let item;
 
     for (i = 0; i < seq.items.length; i += 1) {
+        item = seq.items[i];
+
         if (i > 0 &&
             this.config.implicitMultiply &&
             rule &&
             rule.implicitMultiply &&
-            this.editorNodesImplicitlyMultiply(
-                seq.items[i - 1],
-                seq.items[i]
-            )) {
+            this.editorNodesImplicitlyMultiply(seq.items[i - 1], item)) {
 
-            result.push({
-                type: "operator",
-                op: "*",
-                implicit: true
-            });
+            tokens.push({ kind: "operator", op: "*", src: [] });
         }
 
-        result.push(this.semanticNode(seq.items[i]));
+        if (item.type === "operator") {
+            tokens.push({ kind: "operator", op: item.op, src: [item.id] });
+        } else if (item.type === "separator") {
+            tokens.push({ kind: "comma", src: [item.id] });
+        } else {
+            tokens.push({ kind: "operand", node: this.semanticNode(item) });
+        }
     }
 
-    if (result.length === 0) return null;
-    if (result.length === 1) return result[0];
+    if (tokens.length === 0) return null;
+
+    return this.parseSemanticList(tokens);
+};
+
+/* An operation; operands of the same associative operation are merged: (a+b)+c -> (+, a, b, c). */
+MoodleMathKeyboard.prototype.makeSemanticOperation = function(op, operands, src) {
+    let merged = [];
+    let mergedSrc = (src || []).slice();
+    let associative = op === "+" || op === "*" || op === "and" || op === "or";
+    let i;
+
+    for (i = 0; i < operands.length; i += 1) {
+        if (associative && operands[i].type === "operation" && operands[i].op === op) {
+            merged = merged.concat(operands[i].operands);
+            mergedSrc = mergedSrc.concat(operands[i].src || []);
+        } else {
+            merged.push(operands[i]);
+        }
+    }
+
+    return { type: "operation", op: op, operands: merged, src: mergedSrc };
+};
+
+/* Split tokens at operators of one level. Returns { parts: [[tokens]], operators: [token] }. */
+MoodleMathKeyboard.prototype.splitSemanticTokens = function(tokens, isSplitter) {
+    let parts = [[]];
+    let operators = [];
+    let i;
+
+    for (i = 0; i < tokens.length; i += 1) {
+        if (isSplitter(tokens[i], i)) {
+            operators.push(tokens[i]);
+            parts.push([]);
+        } else {
+            parts[parts.length - 1].push(tokens[i]);
+        }
+    }
+
+    return { parts: parts, operators: operators };
+};
+
+MoodleMathKeyboard.prototype.parseSemanticList = function(tokens) {
+    let self = this;
+    let split = this.splitSemanticTokens(tokens, function(t) { return t.kind === "comma"; });
+
+    if (split.operators.length === 0) return this.parseSemanticLevel(tokens, 0);
 
     return {
-        type: "sequence",
-        items: result
+        type: "list",
+        items: split.parts.map(function(part) { return self.parseSemanticLevel(part, 0); }),
+        src: split.operators.reduce(function(a, t) { return a.concat(t.src); }, [])
     };
+};
+
+let SEMANTIC_LOGIC_LEVELS = ["implies", "or", "and"];
+
+/* implies / or / and levels, then relations */
+MoodleMathKeyboard.prototype.parseSemanticLevel = function(tokens, levelIndex) {
+    let self = this;
+
+    if (levelIndex >= SEMANTIC_LOGIC_LEVELS.length) return this.parseSemanticRelations(tokens);
+
+    let level = SEMANTIC_LOGIC_LEVELS[levelIndex];
+    let split = this.splitSemanticTokens(tokens, function(t) {
+        return t.kind === "operator" && self.semanticOperatorLevel(t.op) === level;
+    });
+
+    if (split.operators.length === 0) return this.parseSemanticLevel(tokens, levelIndex + 1);
+
+    return this.makeSemanticOperation(
+        level,
+        split.parts.map(function(part) { return self.parseSemanticLevel(part, levelIndex + 1); }),
+        split.operators.reduce(function(a, t) { return a.concat(t.src); }, [])
+    );
+};
+
+/* a R b -> relation; a R b S c -> (and, (R, a, b), (S, b, c)) */
+MoodleMathKeyboard.prototype.parseSemanticRelations = function(tokens) {
+    let self = this;
+    let split = this.splitSemanticTokens(tokens, function(t) {
+        return t.kind === "operator" && self.semanticOperatorLevel(t.op) === "relation";
+    });
+    let sides;
+    let relations = [];
+    let i;
+
+    if (split.operators.length === 0) return this.parseSemanticAdditive(tokens);
+
+    sides = split.parts.map(function(part) { return self.parseSemanticAdditive(part); });
+
+    for (i = 0; i < split.operators.length; i += 1) {
+        relations.push({
+            type: "relation",
+            op: split.operators[i].op,
+            left: sides[i],
+            right: sides[i + 1],
+            src: split.operators[i].src
+        });
+    }
+
+    return relations.length === 1 ? relations[0] : this.makeSemanticOperation("and", relations, []);
+};
+
+/*
+ * + - ± ∓. An additive operator right after an operand is binary; at the
+ * start or after another operator it is a unary sign of the following term.
+ */
+MoodleMathKeyboard.prototype.parseSemanticAdditive = function(tokens) {
+    let self = this;
+    let split = this.splitSemanticTokens(tokens, function(t, i) {
+        return t.kind === "operator" &&
+            self.semanticOperatorLevel(t.op) === "additive" &&
+            i > 0 && tokens[i - 1].kind === "operand";
+    });
+    let terms = [this.parseSemanticTerm(split.parts[0])];
+    let termsSrc = [];
+    let i;
+    let term;
+    let op;
+
+    function combine() {
+        return terms.length === 1 ? terms[0] : self.makeSemanticOperation("+", terms, termsSrc);
+    }
+
+    for (i = 0; i < split.operators.length; i += 1) {
+        op = split.operators[i];
+        term = this.parseSemanticTerm(split.parts[i + 1]);
+
+        if (op.op === "+") {
+            terms.push(term);
+            termsSrc = termsSrc.concat(op.src);
+        } else if (op.op === "-") {
+            terms.push(this.makeSemanticOperation("neg", [term], op.src));
+            termsSrc = termsSrc.concat(op.src);
+        } else {
+            /* a ± b is its own node, never merged into + */
+            terms = [this.makeSemanticOperation(op.op, [combine(), term], op.src)];
+            termsSrc = [];
+        }
+    }
+
+    return combine();
+};
+
+/* optional unary signs, then a product: -ab -> (neg, (*, a, b)) */
+MoodleMathKeyboard.prototype.parseSemanticTerm = function(tokens) {
+    let self = this;
+    let first = tokens[0];
+
+    if (!first) return { type: "missing" };
+
+    if (first.kind === "operator" && this.semanticOperatorLevel(first.op) === "additive") {
+        let operand = this.parseSemanticTerm(tokens.slice(1));
+
+        if (first.op === "+") return operand;
+        if (first.op === "-") return this.makeSemanticOperation("neg", [operand], first.src);
+        return this.makeSemanticOperation(first.op, [operand], first.src);
+    }
+
+    let split = this.splitSemanticTokens(tokens, function(t) {
+        return t.kind === "operator" && t.op === "*";
+    });
+
+    if (split.operators.length === 0) return this.parseSemanticFactor(tokens);
+
+    return this.makeSemanticOperation(
+        "*",
+        split.parts.map(function(part) { return self.parseSemanticFactor(part); }),
+        split.operators.reduce(function(a, t) { return a.concat(t.src); }, [])
+    );
+};
+
+/*
+ * A single operand; a signed factor as in 2·(-3) typed 2·-3; or operands
+ * side by side without an implicit-multiply operator (e.g. 2π), which are a product.
+ */
+MoodleMathKeyboard.prototype.parseSemanticFactor = function(tokens) {
+    if (tokens.length === 0) return { type: "missing" };
+    if (tokens.length === 1 && tokens[0].kind === "operand") return tokens[0].node;
+    if (tokens[0].kind === "operator") return this.parseSemanticTerm(tokens);
+
+    let operands = [];
+    let i;
+
+    for (i = 0; i < tokens.length; i += 1) {
+        if (tokens[i].kind !== "operand") return { type: "missing" };
+        operands.push(tokens[i].node);
+    }
+
+    return this.makeSemanticOperation("*", operands, []);
 };
 MoodleMathKeyboard.prototype.renderFromDefinition = function(node, editing, def) {
 
@@ -3102,7 +3479,7 @@ MoodleMathKeyboard.prototype.makeButton = function (parent, latex, title, action
     if (latex !== null) {
         this.setMathLabel(button, latex);
     }
-    if (title) button.title = title;
+    if (title) button.title = this.getLocalizedText(title);
     button.onclick = function (event) {
         event.stopPropagation();
         if (self.config.readOnly) return;
@@ -3117,7 +3494,7 @@ MoodleMathKeyboard.prototype.makeTextButton = function (parent, text, title, act
     button.type = "button";
     button.textContent = text;
     this.applyButtonStyle(button);
-    if (title) button.title = title;
+    if (title) button.title = this.getLocalizedText(title);
     button.onclick = function (event) {
         event.stopPropagation();
         if (!self.config.readOnly) action();
@@ -3205,7 +3582,7 @@ MoodleMathKeyboard.prototype.init = function () {
     this.keyboardToggleButton = document.createElement("button");
     this.keyboardToggleButton.type = "button";
     this.keyboardToggleButton.textContent = "⌨";
-    this.keyboardToggleButton.title = "Open keyboard";
+    this.keyboardToggleButton.title = this.getLocalizedText("Open keyboard");
     this.keyboardToggleButton.style.width = "42px";
     this.keyboardToggleButton.style.border = "1px solid #888";
     this.keyboardToggleButton.style.borderRadius = "6px";
@@ -3310,7 +3687,7 @@ MoodleMathKeyboard.prototype.init = function () {
     let closeButton = document.createElement("button");
     closeButton.type = "button";
     closeButton.textContent = "×";
-    closeButton.title = "Close";
+    closeButton.title = this.getLocalizedText("Close");
     closeButton.style.border = "none";
     closeButton.style.backgroundColor = "transparent";
     closeButton.style.padding = "0";
@@ -3716,6 +4093,13 @@ MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
             self.closePanel("structures");
         });
     }
+    if (this.config.structures.evaluation) {
+        checkRow();
+        this.makeButton(row, "F\\bigg|_{a}^{b}", "Evaluate between bounds", function () {
+            self.insertEvaluation();
+            self.closePanel("structures");
+        });
+    }
     if (this.config.structures.summation) {
         checkRow();
         this.makeButton(row, "\\sum", "Summation", function () {
@@ -3737,13 +4121,22 @@ MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
             self.closePanel("structures");
         });
     }
-    if (this.config.structures.vector) {
+    let vectorNotation = this.config.structures.vector === true ? "arrow" : this.config.structures.vector;
+
+    if (vectorNotation === "arrow" || vectorNotation === "both") {
         checkRow();
-        this.makeButton(row, "\\vec{u}", "Vector", function() {
-            self.insertVector();
+        this.makeButton(row, "\\vec{u}", "Vector (arrow)", function() {
+            self.insertVector("arrow");
             self.closePanel("structures");
         });
-    } 
+    }
+    if (vectorNotation === "underline" || vectorNotation === "both") {
+        checkRow();
+        this.makeButton(row, "\\underline{u}", "Vector (underline)", function() {
+            self.insertVector("underline");
+            self.closePanel("structures");
+        });
+    }
     if (this.config.complexNumbers) {
         checkRow();
         this.makeButton(row, "\\bar{x}", "Conjugate", function() {
@@ -4281,32 +4674,15 @@ let NODE_DEFS = {
 
         render: "\\left(#content#\\right)",
 
+        /* parentheses only group - the tree shows the grouping; with commas the group is a tuple (or vector) */
         semantic: function(kbd, node) {
-            let i;
-            let item;
-            let hasComma = false;
-
-            for (i = 0; i < node.content.items.length; i += 1) {
-                item = node.content.items[i];
-
-                if (item.type === "separator" && item.separator === "comma") {
-                    hasComma = true;
-                    break;
-                }
-            }
-
             let content = kbd.semanticSequence(node.content);
-            if (!hasComma) {
-                return {
-                    type: "group",
-                    child: content
-                };
+
+            if (content && content.type === "list") {
+                return { type: "tuple", elements: content.items, src: [node.id] };
             }
 
-            return {
-                type: "tuple",
-                elements: content
-            };
+            return content || { type: "missing", src: [node.id] };
         }
     },
 
@@ -4322,8 +4698,11 @@ let NODE_DEFS = {
 
         render: "\\left\\{#content#\\right\\}",
 
-        semantic: {
-            type: "set"
+        semantic: function(kbd, node) {
+            let content = kbd.semanticSequence(node.content);
+            let elements = !content ? [] : content.type === "list" ? content.items : [content];
+
+            return { type: "set", elements: elements };
         }
     },
 
@@ -4394,12 +4773,10 @@ let NODE_DEFS = {
         render: "\\frac{#numerator#}{#denominator#}",
 
         semantic: function(kbd, node) {
-            return {
-                type: "binary",
-                op: "/",
-                left: kbd.semanticSequence(node.numerator),
-                right: kbd.semanticSequence(node.denominator)
-            };
+            return kbd.makeSemanticOperation("/", [
+                kbd.semanticSequence(node.numerator) || { type: "missing" },
+                kbd.semanticSequence(node.denominator) || { type: "missing" }
+            ], [node.id]);
         }
     },
 
@@ -4546,8 +4923,15 @@ let NODE_DEFS = {
             }
         },
 
-        render: "\\vec{#name#}",
+        render: function(kbd, node, editing) {
+            let name = kbd.renderNode(node.name, editing);
 
+            return node.notation === "underline"
+                ? "\\underline{" + name + "}"
+                : "\\vec{" + name + "}";
+        },
+
+        /* notation (arrow / underline) is display only - not part of the semantic value */
         semantic: {
             type: "vector"
         }
@@ -4605,6 +4989,26 @@ let NODE_DEFS = {
         }
 
         return name + "_{\\scriptscriptstyle " + kbd.renderSequence( node.subscript, editing, !editing ) + "}";
+        },
+
+        /* name of a vector / named function: the typed characters joined, e.g. "AB", "f", "v2" */
+        semantic: function(kbd, node) {
+            let name = "";
+            let i;
+            let item;
+
+            for (i = 0; i < node.variable.items.length; i += 1) {
+                item = node.variable.items[i];
+
+                if (item.type === "variable") name += item.name;
+                else if (item.type === "identifierChar" || item.type === "number") name += item.text;
+            }
+
+            return {
+                type: "variableName",
+                name: name,
+                subscript: node.subscript ? kbd.semanticSequence(node.subscript) : null
+            };
         }
     },
     scientific: {
@@ -4732,25 +5136,11 @@ let NODE_DEFS = {
         },
 
         semantic: function(kbd, node) {
+            let exponent = node.fixedExponent
+                ? { type: "number", value: node.fixedExponent }
+                : kbd.semanticSequence(node.exponent) || { type: "missing" };
 
-            if (node.fixedExponent) {
-                return {
-                    type: "binary",
-                    op: "^",
-                    left: kbd.semanticNode(node.base),
-                    right: {
-                        type: "number",
-                        value: node.fixedExponent
-                    }
-                };
-            }
-
-            return {
-                type: "binary",
-                op: "^",
-                left: kbd.semanticNode(node.base),
-                right: kbd.semanticSequence(node.exponent)
-            };
+            return kbd.makeSemanticOperation("^", [kbd.semanticNode(node.base), exponent], [node.id]);
         }
     },
 
@@ -4927,6 +5317,38 @@ render: function(kbd, node, editing) {
         semantic: {
         type: "integral"
     }
+    },
+
+    evaluation: {
+        children: {
+            base: {
+                renderAs: "node",
+                convertAs: "node",
+                cursor: { order: 1 }
+            },
+
+            lower: {
+                renderAs: "sequence",
+                convertAs: "sequence",
+                cursor: { order: 2 },
+                placeholder: PLACEHOLDER_ID.LOWER_BOUND
+            },
+
+            upper: {
+                renderAs: "sequence",
+                convertAs: "sequence",
+                cursor: { order: 3 },
+                placeholder: PLACEHOLDER_ID.UPPER_BOUND
+            }
+        },
+
+        /* fixed \bigg| spans from the bottom of the lower bound to the top of the upper bound
+           (MathJax does not stretch \right| over a \vphantom) */
+        render: "#base#\\bigg|_{#lower#}^{#upper#}",
+
+        semantic: {
+            type: "evaluation"
+        }
     },
 
     indexedOperator: {
@@ -5321,7 +5743,7 @@ let SYNTAX_RULES = {
     expression: { allow: ["digit","decimal","variable","constant","plus","minus",
         "additive","multiply","divide","relation","group","sqrt","nthRoot",
         "fixedExponent","power","simpleFraction","function","namedFunction",
-        "integral","sum","product","limit","derivative","absolute","scientific","postfix",
+        "integral","evaluation","sum","product","limit","derivative","absolute","scientific","postfix",
         "symbol","subscript", "set", "vector", "conjugate"],
         valueType: VALUE_TYPE.ALGEBRAIC,
         implicitMultiply: true
@@ -5331,7 +5753,7 @@ let SYNTAX_RULES = {
             "digit","decimal","variable","constant","plus","minus",
             "additive","multiply","divide","relation","group","sqrt","nthRoot",
             "fixedExponent","power","simpleFraction","function","namedFunction",
-            "integral","sum","product","limit","derivative","absolute","scientific",
+            "integral","evaluation","sum","product","limit","derivative","absolute","scientific",
             "postfix","symbol","subscript","comma","set","vector","conjugate"
         ],
         valueType: VALUE_TYPE.ALGEBRAIC,
@@ -5350,7 +5772,7 @@ let SYNTAX_RULES = {
      },
     setContent: { allow: ["comma", "digit","decimal","variable","constant","plus","minus","additive",
         "multiply","divide","group","sqrt","nthRoot","fixedExponent","power","simpleFraction","function",
-        "namedFunction","absolute","scientific","postfix","symbol","subscript","comma"],
+        "namedFunction","absolute","scientific","postfix","symbol","subscript","comma","vector"],
         valueType: VALUE_TYPE.ALGEBRAIC, 
         implicitMultiply: true
     },
@@ -5519,6 +5941,7 @@ let PHYSICAL_KEY_ACTIONS = {
     "^": "insertPower",
     "'": "applyPrime",
     "_": "insertSubscript",
+    "|": "insertEvaluation",
 
     "!": ["insertPhysicalSymbol", "factorial"],
     "%": ["insertPhysicalSymbol", "percent"],
@@ -5624,7 +6047,10 @@ MoodleMathKeyboard.prototype.handlePhysicalKey = function(event) {
     }
 };
 MoodleMathKeyboard.prototype.getLocalizedText = function(value) {
-    if (typeof value === "string") return value;
+    if (typeof value === "string") {
+        let translation = TOOLTIP_TEXT[value.trim()];
+        return (translation && translation[this.config.language]) || value;
+    }
     if (!value) return "";
     return value[this.config.language] || value.en || "";
 };

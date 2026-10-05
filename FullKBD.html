@@ -39,6 +39,7 @@ let keyboard = new MoodleMathKeyboard({
     complexNumbers: true,
     enableEquals: true,
     sets: false,
+
     multiplicationSymbol: "cdot",
     showImplicitMultiply: true,
     placeholderTooltips: true,
@@ -64,11 +65,12 @@ let keyboard = new MoodleMathKeyboard({
     },
     structures: {
         integral: true,
+        evaluation: true,
         summation: true,
         product: true,
         limit: true,
         absoluteValue: true,
-        vector:true,
+        vector: "both",          // "none" | "arrow" | "underline" | "both"
         derivative: true,
         partialDerivative: true
     },

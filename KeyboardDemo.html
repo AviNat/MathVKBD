@@ -60,13 +60,14 @@ let keyboard = new MoodleMathKeyboard({
     },
     structures: {
         integral: true,
+        evaluation: true,
         summation: true,
         product: true,
         limit: true,
         absoluteValue: true,
-        vector:true,
+        vector: "both",          // "none" | "arrow" | "underline" | "both"
         derivative: true,
-        partialDerivative: false
+        partialDerivative: true
     },
    symbols: {
         general: true,
