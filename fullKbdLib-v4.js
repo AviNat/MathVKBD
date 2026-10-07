@@ -881,6 +881,9 @@ MoodleMathKeyboard.prototype.moveCursor = function (delta) {
         }
     }
 
+    /* A_1B_2 →: leaving the index of the last point of a vector name leaves the vector */
+    let pointIndex = delta > 0 ? this.vectorPointIndexContext() : null;
+
     let map = this.buildCursorMap();
 
     let i;
@@ -903,6 +906,13 @@ MoodleMathKeyboard.prototype.moveCursor = function (delta) {
 
     if (index < 0) index = 0;
     if (index >= map.length) index = map.length - 1;
+
+    if (pointIndex &&
+        map[index].seqId === pointIndex.nameSequence.id &&
+        map[index].offset === pointIndex.nameSequence.items.length &&
+        index + 1 < map.length) {
+        index += 1;
+    }
 
     this.cursor = map[index];
 
@@ -1244,6 +1254,27 @@ MoodleMathKeyboard.prototype.insertOperator = function(op, explicit) {
 };
 
 MoodleMathKeyboard.prototype.insertVariable = function(def, typed) {
+    /*
+     * A_1 B: in the index of a vector point, a letter after an operand (not
+     * after + or -) starts the next point. Ignored when the name is full.
+     */
+    let pointIndex = this.vectorPointIndexContext();
+
+    if (pointIndex) {
+        let before = this.nodeBeforeCursor();
+
+        if (before && before.type !== "operator" && before.type !== "separator") {
+            let saved = this.cursor;
+
+            this.cursor = { seqId: pointIndex.nameSequence.id, offset: pointIndex.position + 1, textNodeId: null, charOffset: null };
+
+            if (!this.syntaxAllows("variable")) {
+                this.cursor = saved;
+                return;
+            }
+        }
+    }
+
     if (!this.syntaxAllows("variable")) return;
 
     if (this.currentSyntax() === "functionName" || this.currentSyntax() === "variableNamePart") {
@@ -1399,6 +1430,26 @@ MoodleMathKeyboard.prototype.insertSubscript = function () {
 
     let seq = this.currentSequence();
     if (!seq || this.cursor.offset <= 0) return;
+
+    /* vector name: each point gets its own index, A_1B_2 */
+    if (this.isVectorNameSequence(seq)) {
+        let point = seq.items[this.cursor.offset - 1];
+
+        if (point.type !== "identifierChar" || /^[0-9]$/.test(point.text)) return;
+
+        let index = this.makeSequence([], "subscript");
+
+        seq.items[this.cursor.offset - 1] = {
+            id: this.newId(),
+            type: "indexedVariable",
+            variable: point,
+            subscript: index
+        };
+
+        this.cursor = { seqId: index.id, offset: 0, textNodeId: null, charOffset: null };
+        this.changed();
+        return;
+    }
 
     if (seq.syntax === "variableNamePart") {
         let info = this.findParent(this.editorAST, seq.id);
@@ -1676,6 +1727,32 @@ MoodleMathKeyboard.prototype.exitIndexedVariableSubscript = function() {
 
     return true;
 };
+/* seq is the name sequence of a vector (AB, u) - not of a named function */
+MoodleMathKeyboard.prototype.isVectorNameSequence = function(seq) {
+    if (!seq || seq.syntax !== "variableNamePart") return false;
+
+    let info = this.findParent(this.editorAST, seq.id);
+    if (!info || info.parent.type !== "variableName" || info.key !== "variable") return false;
+
+    let outer = this.findParent(this.editorAST, info.parent.id);
+    return !!outer && outer.parent.type === "vector" && outer.key === "name";
+};
+/*
+ * Cursor in the index of a point of a vector name (the 1 of A_1 in A_1B_2):
+ * returns the point (indexedVariable), its position and the name sequence, or null.
+ */
+MoodleMathKeyboard.prototype.vectorPointIndexContext = function() {
+    let seq = this.currentOrContainingSequence();
+    if (!seq) return null;
+
+    let slot = this.findParent(this.editorAST, seq.id);
+    if (!slot || slot.parent.type !== "indexedVariable" || slot.key !== "subscript") return null;
+
+    let pointInfo = this.findParent(this.editorAST, slot.parent.id);
+    if (!pointInfo || pointInfo.parent.type !== "sequence" || !this.isVectorNameSequence(pointInfo.parent)) return null;
+
+    return { point: slot.parent, nameSequence: pointInfo.parent, position: pointInfo.index };
+};
 MoodleMathKeyboard.prototype.insertNamedFunction = function() {
     this.exitIndexedVariableSubscript();
 
@@ -1854,6 +1931,9 @@ MoodleMathKeyboard.prototype.deleteFunctionNameModifier = function(seq) {
     return false;
 };
 MoodleMathKeyboard.prototype.applyPrime = function() {
+    /* ' is the derivative only - no primed points (A') in a vector name */
+    if (this.vectorPointIndexContext() || this.isVectorNameSequence(this.currentSequence())) return;
+
     this.exitIndexedVariableSubscript();
 
     let namedFunction = this.getNamedFunctionFromNameSlot();
@@ -4926,8 +5006,11 @@ let NODE_DEFS = {
         render: function(kbd, node, editing) {
             let name = kbd.renderNode(node.name, editing);
 
-            return node.notation === "underline"
-                ? "\\underline{" + name + "}"
+            if (node.notation === "underline") return "\\underline{" + name + "}";
+
+            /* AB, A_1B_2: the arrow spans the whole name; a single letter keeps the short \vec arrow */
+            return node.name.variable.items.length > 1
+                ? "\\overrightarrow{" + name + "}"
                 : "\\vec{" + name + "}";
         },
 
@@ -4991,24 +5074,50 @@ let NODE_DEFS = {
         return name + "_{\\scriptscriptstyle " + kbd.renderSequence( node.subscript, editing, !editing ) + "}";
         },
 
-        /* name of a vector / named function: the typed characters joined, e.g. "AB", "f", "v2" */
+        /*
+         * name of a vector / named function: the typed characters joined, e.g. "AB", "f", "v2".
+         * A vector name of two letters also lists its points, each with its own index:
+         * A_1B_2 -> name "AB", points [A_1, B_2]. A single indexed point u_1 -> name "u", subscript 1.
+         */
         semantic: function(kbd, node) {
             let name = "";
+            let points = [];
             let i;
             let item;
+            let letter;
+            let text;
 
             for (i = 0; i < node.variable.items.length; i += 1) {
                 item = node.variable.items[i];
+                letter = item.type === "indexedVariable" ? item.variable : item;
+                text = letter.type === "variable" ? letter.name : (letter.text || "");
 
-                if (item.type === "variable") name += item.name;
-                else if (item.type === "identifierChar" || item.type === "number") name += item.text;
+                name += text;
+                points.push({
+                    type: "variableName",
+                    name: text,
+                    subscript: item.type === "indexedVariable" ? kbd.semanticSequence(item.subscript) : null,
+                    isLetter: /^[^0-9]$/.test(text)
+                });
             }
 
-            return {
+            let result = {
                 type: "variableName",
                 name: name,
                 subscript: node.subscript ? kbd.semanticSequence(node.subscript) : null
             };
+
+            if (!kbd.isVectorNameSequence(node.variable)) return result;
+
+            if (points.length === 1 && points[0].subscript) {
+                result.subscript = points[0].subscript;
+            } else if (points.length === 2 && points[0].isLetter && points[1].isLetter) {
+                result.points = points.map(function (point) {
+                    return { type: "variableName", name: point.name, subscript: point.subscript };
+                });
+            }
+
+            return result;
         }
     },
     scientific: {

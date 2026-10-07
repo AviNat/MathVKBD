@@ -34,7 +34,7 @@
 (function (global) {
 "use strict";
 
-let TEST_VARIABLES = ["a", "b", "c", "f", "n", "t", "u", "x", "y"].map(function (v) {
+let TEST_VARIABLES = ["a", "b", "c", "f", "n", "t", "u", "x", "y", "A", "B", "C"].map(function (v) {
     return { id: v, label: v, latex: v };
 });
 
@@ -106,6 +106,15 @@ let CASES = [
     { group: "Structures", name: "two evaluations", keys: "x | 0 → 1 → → - y | 0", expect: "(+ evaluation<base=x lower=0 upper=1> (neg evaluation<base=y lower=0 upper=∅>))" },
     { group: "Structures", name: "vector with arrow", keys: "2 vec u", expect: "(* 2 vec(u))" },
     { group: "Structures", name: "vector with index", keys: "vec x _ 1", expect: "vec(x_1)" },
+    { group: "Structures", name: "vector index then →", keys: "vec x _ 1 → + 2", expect: "(+ vec(x_1) 2)" },
+    { group: "Structures", name: "vector of two points", keys: "vec A B → + u", expect: "(+ vec(AB) u)" },
+    { group: "Structures", name: "vector A_1B_2", keys: "vec A _ 1 B _ 2", expect: "vec(A_1B_2)" },
+    { group: "Structures", name: "vector A_1B_2 → exits", keys: "vec A _ 1 B _ 2 → + u", expect: "(+ vec(A_1B_2) u)" },
+    { group: "Structures", name: "vector AB_2 → exits", keys: "vec A B _ 2 → + u", expect: "(+ vec(AB_2) u)" },
+    { group: "Structures", name: "vector index n+1", keys: "vec A _ n + 1 B _ n", expect: "vec(A_(+ n 1)B_n)" },
+    { group: "Structures", name: "vector name full: third point ignored", keys: "vec A _ 1 B _ 2 C", expect: "vec(A_1B_2)" },
+    { group: "Structures", name: "vector: DEL empty point index", keys: "vec A _ 1 B _ DEL", expect: "vec(A_1B)" },
+    { group: "Structures", name: "vector: no prime in the name", keys: "vec A ' B", expect: "vec(AB)" },
     { group: "Structures", name: "vector underline", keys: "0 . 5 vec_ u", expect: "(* 0.5 vec(u))" },
     { group: "Structures", name: "absolute value", keys: "abs x - 1", expect: "abs((+ x (neg 1)))" },
     { group: "Structures", name: "sine", keys: "sin x", expect: "sin(x)" },
@@ -175,7 +184,9 @@ function show(node) {
         case "tuple": return "tuple[" + node.elements.map(show).join(", ") + "]";
         case "set": return "set{" + node.elements.map(show).join(", ") + "}";
         case "list": return "list[" + node.items.map(show).join(", ") + "]";
-        case "variableName": return node.name + (node.subscript ? "_" + show(node.subscript) : "");
+        case "variableName":
+            if (node.points) return node.points.map(show).join("");
+            return node.name + (node.subscript ? "_" + show(node.subscript) : "");
         case "indexedVariable": return show(node.variable) + "_" + show(node.subscript);
         case "vector": return "vec(" + show(node.name) + ")";
         case "function": return node.name + (node.base !== undefined ? "_" + show(node.base) : "") + "(" + show(node.argument) + ")";
@@ -253,7 +264,7 @@ let KEY_ACTIONS = {
 function pressKey(k, key) {
     if (/^[0-9]$/.test(key)) return k.insertDigit(key);
 
-    if (/^[a-z]$/.test(key)) {
+    if (/^[a-zA-Z]$/.test(key)) {
         let variable = k.config.variables.filter(function (v) { return v.id === key; })[0];
         if (!variable) throw new Error("variable not in the test variables: " + key);
         return k.insertVariable(variable, false);
