@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MathKeyboard examples</title>
+
+<!-- 1. MathJax 3 (the keyboard draws with it). The html extension is needed for the cursor. -->
+<script>
+window.MathJax = {
+    loader: { load: ["[tex]/html"] },
+    tex: { packages: { "[+]": ["html"] }, inlineMath: [["\\(", "\\)"]] },
+    svg: { fontCache: "global" }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<!-- 2. The keyboard library, from GitHub -->
+<script src="https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js"></script>
+
+<style>
+:root {
+    --bg: #f4f6f9; --card: #ffffff; --text: #1d2733; --muted: #5b6876; --line: #d5dce4;
+    --accent: #1f5f99; --ok: #1a7f37; --warn: #b54708; --code-bg: #0f1b2a; --code-text: #e3ebf5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); }
+header { background: #13314f; color: #fff; padding: 18px 16px; }
+header h1 { margin: 0 0 4px; font-size: 22px; }
+header p { margin: 0; opacity: .85; max-width: 900px; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+.card h2 { margin: 0 0 4px; font-size: 18px; }
+.card .what { color: var(--muted); margin: 0 0 12px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+.kbd-host { border: 2px solid transparent; border-radius: 10px; padding: 4px; }
+.kbd-host.active { border-color: var(--accent); }
+.label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 10px 0 4px; }
+.out { font: 12px/1.4 Consolas, monospace; background: #f8fafc; border: 1px solid var(--line); border-radius: 8px;
+       padding: 8px 10px; white-space: pre-wrap; word-break: break-all; min-height: 34px; max-height: 220px; overflow: auto; }
+.status { margin-top: 8px; font-size: 14px; font-weight: 600; }
+.status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 12px 14px;
+           font: 12.5px/1.5 Consolas, monospace; overflow-x: auto; }
+details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 8px; }
+code { font-family: Consolas, monospace; background: #eef3f8; padding: 0 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MathKeyboard - three examples</h1>
+  <p>Each keyboard is configured for one kind of answer. Click a keyboard to type into it with the computer keyboard
+     too, or open its on-screen keyboard with the keyboard button. Next to each one: the code that creates it; below
+     it, what it gives back (LaTeX and the semantic AST).</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Numbers only</h2>
+    <p class="what">A numeric answer: digits, operations, fractions, powers, roots and π - no variables, no "=",
+       no functions or structures.</p>
+    <div class="row">
+      <div>
+        <div id="kbdNumeric" class="kbd-host"></div>
+        <div class="label">LaTeX</div><div class="out" id="latexNumeric"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astNumeric"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeNumeric"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Algebraic expressions in x and y</h2>
+    <p class="what">An expression with the variables x and y (and the common functions) - no "=".</p>
+    <div class="row">
+      <div>
+        <div id="kbdAlgebra" class="kbd-host"></div>
+        <div class="label">LaTeX</div><div class="out" id="latexAlgebra"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astAlgebra"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeAlgebra"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. An equation (a single "=")</h2>
+    <p class="what">An equation in x and y: the "=" key is on, and the page allows it only once.</p>
+    <div class="row">
+      <div>
+        <div id="kbdEquation" class="kbd-host"></div>
+        <div class="status" id="statusEquation"></div>
+        <div class="label">LaTeX</div><div class="out" id="latexEquation"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astEquation"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeEquation"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Several keyboards on one page</h2>
+    <p class="what">A keyboard listens to the computer keyboard on the whole page. With more than one, each is
+       created with <code>physicalKeyboard: false</code> and the page passes the keys to the keyboard the student
+       clicked last:</p>
+    <pre class="code" id="codeRouting"></pre>
+  </section>
+</main>
+
+<script>
+/* ---------- the three configurations (shown on the page as the code that creates them) ---------- */
+const NUMERIC = {
+    variables: [],              // no variables
+    enableEquals: false,        // no "=" key
+    complexNumbers: false,      // no i
+    sets: false,
+    functions: {},              // nothing in the functions panel
+    structures: {},             // no integrals, limits, sums, vectors...
+    symbols: {},                // no symbol groups
+    multiplicationSymbol: "cdot"
+};
+
+const ALGEBRA = {
+    variables: [
+        { id: "x", label: "x", latex: "x" },
+        { id: "y", label: "y", latex: "y" }
+    ],
+    enableEquals: false,
+    complexNumbers: false,
+    sets: false,
+    functions: { logarithmic: true, trigonometric: true },
+    structures: { absoluteValue: true },
+    symbols: {},
+    multiplicationSymbol: "cdot"
+};
+
+const EQUATION = {
+    variables: [
+        { id: "x", label: "x", latex: "x" },
+        { id: "y", label: "y", latex: "y" }
+    ],
+    enableEquals: true,         // the "=" key (one "=" per answer: see below)
+    complexNumbers: false,
+    sets: false,
+    functions: { logarithmic: true, trigonometric: true },
+    structures: { absoluteValue: true },
+    symbols: {},
+    multiplicationSymbol: "cdot"
+};
+
+/* ---------- creating a keyboard ---------- */
+const $ = function (id) { return document.getElementById(id); };
+const keyboards = [];
+
+function create(hostId, config, outId) {
+    const keyboard = new MoodleMathKeyboard(Object.assign({}, config, {
+        divId: hostId,
+        physicalKeyboard: false,          // several keyboards on the page: see the last section
+        onChange: function (value) {      // value.latex, value.ast (semantic), value.editorAST
+            $("latex" + outId).textContent = value.latex;
+            $("ast" + outId).textContent = JSON.stringify(stripIds(value.ast), null, 1);
+            if (outId === "Equation") showEquationStatus(value.ast);
+        }
+    }));
+    $(hostId).addEventListener("mousedown", function () { setActive(keyboard); });
+    keyboards.push({ keyboard: keyboard, host: $(hostId) });
+    return keyboard;
+}
+
+/* the AST carries editor ids ("src") for highlighting; left out here to keep it readable */
+function stripIds(ast) {
+    return JSON.parse(JSON.stringify(ast, function (k, v) { return k === "src" ? undefined : v; }));
+}
+
+const numericKbd = create("kbdNumeric", NUMERIC, "Numeric");
+const algebraKbd = create("kbdAlgebra", ALGEBRA, "Algebra");
+const equationKbd = create("kbdEquation", EQUATION, "Equation");
+
+/* ---------- one "=" only: the equation keyboard ignores a second "=" (button and computer key) ---------- */
+const insertEquals = equationKbd.insertEquals;
+equationKbd.insertEquals = function () {
+    if (this.getAST().elements.length >= 2) return;   // the answer already has its "="
+    insertEquals.call(this);
+};
+
+/* the answer is a chain: one element - an expression; two - left = right */
+function isEmpty(node) { return !node || node.type === "missing" || node.type === "placeholder"; }
+function showEquationStatus(ast) {
+    const status = $("statusEquation");
+    const parts = ast.elements;
+    if (parts.length === 2 && !isEmpty(parts[0]) && !isEmpty(parts[1])) {
+        status.textContent = "✓ An equation: left side = right side.";
+        status.className = "status ok";
+    } else if (parts.length === 2) {
+        status.textContent = "Complete both sides of the \"=\".";
+        status.className = "status warn";
+    } else {
+        status.textContent = "Not an equation yet: type \"=\".";
+        status.className = "status warn";
+    }
+}
+showEquationStatus(equationKbd.getAST());
+
+/* ---------- the computer keyboard goes to the keyboard clicked last ---------- */
+let active = null;
+function setActive(keyboard) {
+    active = keyboard;
+    keyboards.forEach(function (k) { k.host.classList.toggle("active", k.keyboard === keyboard); });
+}
+document.addEventListener("keydown", function (event) {
+    if (active) active.handlePhysicalKey(event);
+});
+setActive(numericKbd);
+
+/* ---------- the code shown on the page ---------- */
+/* a value as JavaScript: short objects and arrays on one line, keys without quotes */
+function inline(v) {
+    if (Array.isArray(v)) return "[" + v.map(inline).join(", ") + "]";
+    if (v && typeof v === "object") {
+        const keys = Object.keys(v);
+        return keys.length ? "{ " + keys.map(function (k) { return k + ": " + inline(v[k]); }).join(", ") + " }" : "{}";
+    }
+    return JSON.stringify(v);
+}
+function jsLiteral(v, indent) {
+    const flat = inline(v);
+    if (flat.length <= 64 || !v || typeof v !== "object") return flat;
+    const inner = indent + "    ";
+    if (Array.isArray(v)) return "[\n" + v.map(function (x) { return inner + jsLiteral(x, inner); }).join(",\n") + "\n" + indent + "]";
+    return "{\n" + Object.keys(v).map(function (k) { return inner + k + ": " + jsLiteral(v[k], inner); }).join(",\n") + "\n" + indent + "}";
+}
+function codeFor(name, hostId, config, extra) {
+    const options = Object.assign({ divId: hostId }, config);
+    const body = jsLiteral(options, "").replace(/\n\}$/, ",\n    onChange: function (value) {\n" +
+        "        // value.latex - the LaTeX; value.ast - the semantic AST (for checking)\n" +
+        "    }\n}");
+    return "<div id=\"" + hostId + "\"></div>\n\n" +
+        "const " + name + " = new MoodleMathKeyboard(" + body + ");\n" +
+        "// at any time: " + name + ".getLatex(), " + name + ".getAST()" + (extra || "");
+}
+$("codeNumeric").textContent = codeFor("numericKbd", "kbdNumeric", NUMERIC);
+$("codeAlgebra").textContent = codeFor("algebraKbd", "kbdAlgebra", ALGEBRA);
+$("codeEquation").textContent = codeFor("equationKbd", "kbdEquation", EQUATION,
+    "\n\n// one \"=\" only: ignore a second one\n" +
+    "const insertEquals = equationKbd.insertEquals;\n" +
+    "equationKbd.insertEquals = function () {\n" +
+    "    if (this.getAST().elements.length >= 2) return;\n" +
+    "    insertEquals.call(this);\n" +
+    "};");
+$("codeRouting").textContent =
+    "// each keyboard: new MoodleMathKeyboard({ ..., physicalKeyboard: false })\n" +
+    "let active = null;\n" +
+    "host.addEventListener(\"mousedown\", function () { active = keyboard; });   // for each keyboard\n" +
+    "document.addEventListener(\"keydown\", function (event) {\n" +
+    "    if (active) active.handlePhysicalKey(event);\n" +
+    "});\n\n" +
+    "// with a single keyboard on the page none of this is needed: physicalKeyboard is on by default";
+</script>
+</body>
+</html>

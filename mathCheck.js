@@ -43,6 +43,7 @@ const DEFAULT_RULES = {
         powerForms: true,
         likeTerms: true,
         distributive: true,
+        vectorReversal: true,            // BA⃗ = −AB⃗ (in structural mode; by value always)
         equationTransforms: true         // y + 3 = 2x + 5 is y = 2x + 2: terms moved between the sides (scaling: statements.scaleEquation)
     },
     form: {},                            // check: "off" | "note" | "error"; isolatedVariable: "x" with level
@@ -281,8 +282,28 @@ function varKey(node) {
 }
 function keyOfPlain(node) { return JSON.stringify(stripSrc(node)); }
 
+/*
+ * A vector as an unknown: AB⃗ between two points -> "vec(AB)"; BA⃗ = −AB⃗, so the points in order and a sign
+ * (reversed: written in the other order). v⃗ -> "vec(v)". { key, sign, written }
+ */
+function vectorKey(node) {
+    const nm = node.name || {};
+    if (nm.points && nm.points.length === 2) {
+        const p = varKey(nm.points[0]), q = varKey(nm.points[1]);
+        const join = function (a, b) { return "vec(" + a + (a.length > 1 || b.length > 1 ? "," : "") + b + ")"; };
+        return p <= q ? { key: join(p, q), sign: 1, written: join(p, q) } : { key: join(q, p), sign: -1, written: join(p, q) };
+    }
+    const k = "vec(" + (varKey(nm) || keyOfPlain(nm)) + ")";
+    return { key: k, sign: 1, written: k };
+}
+
 function collectVariables(node, set) {
     walk(node, function (n) {
+        if (n.type === "vector") {
+            const v = vectorKey(n).key;
+            if (set.indexOf(v) < 0) set.push(v);
+            return;
+        }
         if (n.type === "variable" || n.type === "indexedVariable") {
             const k = varKey(n);
             if (k && set.indexOf(k) < 0) set.push(k);
@@ -308,6 +329,12 @@ function evaluate(node, env) {
             const k = varKey(node);
             if (!(k in env.vars)) throw new Unsupported("variable " + k);
             return env.vars[k];
+        }
+        case "vector": {
+            /* BA⃗ = −AB⃗ always, by value */
+            const v = vectorKey(node);
+            if (!(v.key in env.vars)) throw new Unsupported("vector " + v.key);
+            return v.sign * env.vars[v.key];
         }
         case "constant":
             if (node.name === "pi") return Math.PI;
@@ -488,7 +515,7 @@ function constantRatio(rows, i, j, tol) {
 const LADDER = [
     { name: "identical", laws: [] },
     { name: "commutative", laws: ["commutative"] },
-    { name: "numberForms", laws: ["numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms"] },
+    { name: "numberForms", laws: ["numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "vectorReversal"] },
     { name: "likeTerms", laws: ["likeTerms"] },
     { name: "distributive", laws: ["distributive"] },
     /* equations and relations: L − R = 0, divided by the leading coefficient */
@@ -550,6 +577,12 @@ function canonical(node, o) {
         }
         case "variable": case "indexedVariable": return { k: "var", name: varKey(node) };
         case "constant": return { k: "const", name: node.name };
+        case "vector": {
+            /* CB⃗ = −BC⃗ (vectorReversal); without the law the vector as written */
+            const v = vectorKey(node);
+            if (!o.vectorReversal) return { k: "var", name: v.written };
+            return v.sign < 0 ? cneg({ k: "var", name: v.key }, o) : { k: "var", name: v.key };
+        }
         case "operation": return canonicalOperation(node, o);
         case "relation": return crel(node.op, canonical(node.left, o), canonical(node.right, o), o);
         case "chain": {
@@ -864,6 +897,11 @@ function latex(node, parentPrec) {
         case "variable": return node.name;
         case "indexedVariable": return latex(node.variable) + "_{" + latex(node.subscript) + "}";
         case "constant": return node.name === "pi" ? "\\pi" : node.name;
+        case "vector": {
+            const nm = node.name || {};
+            const text = nm.points ? nm.points.map(function (p) { return p.name; }).join("") : (nm.name || "");
+            return nm.points && nm.points.length > 1 ? "\\overrightarrow{" + text + "}" : "\\vec{" + text + "}";
+        }
         case "missing": case "placeholder": return "\\square";
         case "chain": return node.elements.map(function (e) { return latex(e); }).join("=");
         case "relation": return latex(node.left) + REL_LATEX[node.op] + latex(node.right);
@@ -962,6 +1000,7 @@ const TEXT = {
         "note-likeTerms": "Accepted: like terms are not combined.",
         "note-distributive": "Accepted: the same answer, expanded or factored differently.",
         "note-equationTransforms": "Accepted: an equivalent equation (terms moved between the sides).",
+        "note-vectorReversal": "Accepted: a vector written in the opposite direction with a minus sign (\\(\\overrightarrow{BA}=-\\overrightarrow{AB}\\)).",
         "note-same-solutions": "Accepted: an equivalent equation (the same solutions).",
         "note-last-step": "Only the last expression is graded.",
         "note-scaled-equation": "Accepted: an equivalent equation (multiplied by a number).",
@@ -1025,6 +1064,7 @@ const TEXT = {
         "note-likeTerms": "התקבל: איברים דומים לא כונסו.",
         "note-distributive": "התקבל: אותה תשובה, בפתיחת סוגריים או בפירוק אחר.",
         "note-equationTransforms": "התקבל: משוואה שקולה (איברים הועברו מאגף לאגף).",
+        "note-vectorReversal": "התקבל: וקטור בכיוון ההפוך עם סימן מינוס (\\(\\overrightarrow{BA}=-\\overrightarrow{AB}\\)).",
         "note-same-solutions": "התקבל: משוואה שקולה (אותם פתרונות).",
         "note-last-step": "רק הביטוי האחרון נבדק.",
         "note-scaled-equation": "התקבל: משוואה שקולה (כפולה במספר).",
@@ -1088,6 +1128,7 @@ const TEXT = {
         "note-likeTerms": "مقبول: لم تُجمع الحدود المتشابهة.",
         "note-distributive": "مقبول: الإجابة نفسها بعد فك الأقواس أو بتحليل آخر.",
         "note-equationTransforms": "مقبول: معادلة مكافئة (نُقلت حدود من طرف إلى آخر).",
+        "note-vectorReversal": "مقبول: متجه في الاتجاه المعاكس مع إشارة سالب (\\(\\overrightarrow{BA}=-\\overrightarrow{AB}\\)).",
         "note-same-solutions": "مقبول: معادلة مكافئة (الحلول نفسها).",
         "note-last-step": "يتم تقييم التعبير الأخير فقط.",
         "note-scaled-equation": "مقبول: معادلة مكافئة (مضروبة في عدد).",

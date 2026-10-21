@@ -11,10 +11,43 @@ window.MathJax = {
     svg: { fontCache: "global" }
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-<script src="https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js"></script>
-<script src="https://raw.githack.com/AviNat/MathVKBD/main/kbdTests.js"></script>
-<script src="https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js"></script>
+<script>
+/*
+ * The libraries: a local copy next to this page first (the newest, while working on it), else the published one.
+ * One after the other (the keyboard before its tests), then the page starts (startPlayground).
+ */
+const LIBRARIES = [
+    { name: "MathJax", local: "mathjax/tex-svg.js", remote: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" },
+    { name: "fullKbdLib-v4", local: "fullKbdLib-v4.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js" },
+    { name: "kbdTests", local: "kbdTests.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/kbdTests.js" },
+    { name: "mathCheck", local: "mathCheck.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js" }
+];
+const LOADED_FROM = {};
+function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function () { s.remove(); reject(new Error(src)); };
+        document.head.appendChild(s);
+    });
+}
+LIBRARIES.reduce(function (chain, lib) {
+    return chain.then(function () {
+        return loadScript(lib.local).then(function () { LOADED_FROM[lib.name] = "local"; }, function () {
+            return loadScript(lib.remote).then(function () { LOADED_FROM[lib.name] = "remote"; });
+        });
+    });
+}, Promise.resolve()).then(function () {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startPlayground);
+    else startPlayground();
+}).catch(function (e) {
+    document.addEventListener("DOMContentLoaded", function () {
+        document.body.insertAdjacentHTML("afterbegin", "<div style='background:#fdecec;color:#b42318;padding:8px 16px'>" +
+            "Could not load " + e.message + " (no local copy and no network?)</div>");
+    });
+});
+</script>
 <style>
 :root { --line: #d5dce4; --muted: #5b6876; --accent: #1f5f99; --ok: #1a7f37; --bad: #b42318; }
 * { box-sizing: border-box; }
@@ -50,7 +83,8 @@ tr.hit td { background: #e6f4ea; }
 <body>
 <header>
   <h1>mathCheck playground</h1>
-  <span class="sub">Type a reference answer and a student answer; the check runs on every change. Click a keyboard to type into it with the computer keyboard.</span>
+  <span class="sub">Type a reference answer and a student answer; the check runs on every change. Click a keyboard to type into it with the computer keyboard.
+    <br><span id="sources">Loading the libraries…</span></span>
   <label>Feedback language
     <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
   </label>
@@ -113,20 +147,41 @@ tr.hit td { background: #e6f4ea; }
 
   <section>
     <h2>Rubric</h2>
-    <div class="hint">JSON: categories with mode once / each / none, points, max. The diagnosis categories (sign, factor,
-      scale, term) are graded as "value" until they are set here.</div>
-    <textarea id="rubric" spellcheck="false"></textarea>
+    <div class="hint">The grade starts at <i>start</i>; each category takes its points off: <b>once</b> - one deduction
+      however many errors, <b>each</b> - per error up to <i>max</i>, <b>none</b> - no deduction. A fatal error gives 0.</div>
+    <div class="grid" style="margin-top:6px">
+      <label>Start <input type="number" id="rbStart" min="0" max="100" style="width:64px"></label>
+      <label>Minimum grade <input type="number" id="rbMinimum" min="0" max="100" style="width:64px"></label>
+      <label title="An incomplete answer (an empty place) gives 0">Fatal: incomplete <input type="checkbox" id="rbFatal_incomplete"></label>
+      <label title="An answer of another kind (an expression for an equation) gives 0">Fatal: answer type <input type="checkbox" id="rbFatal_answerType"></label>
+    </div>
+    <table id="rubricTable"></table>
+    <details style="margin-top:8px"><summary class="hint">Rubric JSON (edit here or in the table)</summary>
+      <textarea id="rubric" spellcheck="false"></textarea>
+    </details>
     <div id="rubricMsg"></div>
-    <h3>Rules as sent to compare</h3>
-    <textarea id="rulesJson" readonly spellcheck="false" style="height:120px"></textarea>
+  </section>
+
+  <section class="wide">
+    <h2>Code to call the library
+      <button type="button" id="copyCode" style="margin-inline-start:10px">Copy</button>
+      <span id="copyMsg" class="hint"></span></h2>
+    <div class="hint">The reference answer, the rules (only what differs from the defaults) and the rubric of this page,
+      in a call to <code>MathCheck.compare</code> - for a question page, a builder or a Node server.</div>
+    <textarea id="code" readonly spellcheck="false" style="height:260px"></textarea>
   </section>
 </main>
 
 <script>
+/* runs when the libraries are loaded (the loader in <head>) */
+function startPlayground() {
 const $ = function (id) { return document.getElementById(id); };
+$("sources").textContent = "Libraries: " + LIBRARIES.map(function (l) {
+    return l.name + " " + (LOADED_FROM[l.name] === "local" ? "(local)" : "(GitHub/CDN)");
+}).join(" · ");
 const VARIABLES = ["x", "y", "z", "a", "b", "n", "t"].map(function (v) { return { id: v, label: v, latex: v }; })
     .concat([{ id: "alpha", label: "α", latex: "\\alpha" }]);
-const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "likeTerms", "distributive", "equationTransforms"];
+const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "vectorReversal", "likeTerms", "distributive", "equationTransforms"];
 const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "exactValue"];
 let timer = null, active = null, mjChain = null;
 window.addEventListener("error", function (e) { $("errors").textContent = "Error: " + e.message; });
@@ -140,7 +195,133 @@ FORMS.forEach(function (f) {
     $("forms").insertAdjacentHTML("beforeend", "<label>" + f + " <select data-form='" + f + "'>" +
         "<option>off</option><option>note</option><option>error</option></select></label>");
 });
-$("rubric").value = JSON.stringify(MathCheck.defaults.rubric, null, 1);
+
+/* the rubric table: every category the library uses; "(not set)" leaves the category out of the rubric */
+const CATEGORIES = [
+    ["value", "Wrong value"],
+    ["form", "Form check failed (not reduced, not expanded...)"],
+    ["relation", "Wrong relation or direction (< for ≤)"],
+    ["elements", "Missing / extra element of a set, list, statement"],
+    ["order", "Elements in the wrong order (tuple)"],
+    ["precision", "Wrong number of decimals"],
+    ["derivation", "Wrong step in a chain of steps"],
+    ["domain", "Equivalent only in the domain (not set: −30)"],
+    ["mistake", "A teacher-defined mistake"],
+    ["sign", "Diagnosis: wrong sign (not set: graded as value)"],
+    ["factor", "Diagnosis: missing factor (not set: as value)"],
+    ["scale", "Diagnosis: off by a power of 10 (not set: as value)"],
+    ["term", "Diagnosis: missing / extra term (not set: as value)"]
+];
+$("rubricTable").innerHTML = "<tr><th>category</th><th>mode</th><th>points</th><th>max</th><th>when</th></tr>" +
+    CATEGORIES.map(function (c) {
+        return "<tr><td class='mono'>" + c[0] + "</td><td><select data-rb-mode='" + c[0] + "'><option value=''>(not set)</option>" +
+            "<option>once</option><option>each</option><option>none</option></select></td>" +
+            "<td><input type='number' min='0' max='100' style='width:56px' data-rb-points='" + c[0] + "'></td>" +
+            "<td><input type='number' min='0' max='100' style='width:56px' data-rb-max='" + c[0] + "'></td>" +
+            "<td class='hint'>" + c[1] + "</td></tr>";
+    }).join("");
+
+/* table -> JSON */
+function rubricFromUi() {
+    const rubric = {
+        start: Number($("rbStart").value) || 0,
+        minimum: Number($("rbMinimum").value) || 0,
+        fatal: ["incomplete", "answerType"].filter(function (f) { return $("rbFatal_" + f).checked; }),
+        categories: {}
+    };
+    CATEGORIES.forEach(function (c) {
+        const mode = document.querySelector("[data-rb-mode='" + c[0] + "']").value;
+        const points = document.querySelector("[data-rb-points='" + c[0] + "']");
+        const max = document.querySelector("[data-rb-max='" + c[0] + "']");
+        points.disabled = !mode || mode === "none";
+        max.disabled = mode !== "each";
+        if (!mode) return;
+        const rule = { mode: mode };
+        if (mode !== "none") rule.points = Number(points.value) || 0;
+        if (mode === "each" && max.value !== "") rule.max = Number(max.value);
+        rubric.categories[c[0]] = rule;
+    });
+    return rubric;
+}
+/* JSON -> table */
+function rubricToUi(rubric) {
+    $("rbStart").value = rubric.start !== undefined ? rubric.start : 100;
+    $("rbMinimum").value = rubric.minimum !== undefined ? rubric.minimum : 0;
+    ["incomplete", "answerType"].forEach(function (f) { $("rbFatal_" + f).checked = (rubric.fatal || []).indexOf(f) >= 0; });
+    CATEGORIES.forEach(function (c) {
+        const rule = (rubric.categories || {})[c[0]];
+        const r = typeof rule === "number" ? { mode: "once", points: rule } : rule || {};
+        document.querySelector("[data-rb-mode='" + c[0] + "']").value = r.mode || "";
+        document.querySelector("[data-rb-points='" + c[0] + "']").value = r.points !== undefined ? r.points : "";
+        document.querySelector("[data-rb-max='" + c[0] + "']").value = r.max !== undefined ? r.max : "";
+    });
+    rubricFromUi();   // enables / disables the inputs
+}
+function syncRubricJson() { $("rubric").value = JSON.stringify(rubricFromUi(), null, 1); }
+rubricToUi(MathCheck.defaults.rubric);
+syncRubricJson();
+["rbStart", "rbMinimum", "rbFatal_incomplete", "rbFatal_answerType"].forEach(function (id) {
+    $(id).addEventListener("input", syncRubricJson);
+    $(id).addEventListener("change", syncRubricJson);
+});
+$("rubricTable").addEventListener("input", syncRubricJson);
+$("rubricTable").addEventListener("change", syncRubricJson);
+$("rubric").addEventListener("input", function () {
+    try { rubricToUi(JSON.parse($("rubric").value)); } catch (e) { /* the message comes from check() */ }
+});
+
+/* the rules without what equals the defaults - a shorter, clearer call */
+function withoutDefaults(obj, def) {
+    if (obj === null || typeof obj !== "object" || Array.isArray(obj)) return obj;
+    const out = {};
+    Object.keys(obj).forEach(function (k) {
+        const v = obj[k], d = def ? def[k] : undefined;
+        if (JSON.stringify(v) === JSON.stringify(d)) return;
+        if (v && typeof v === "object" && !Array.isArray(v) && d && typeof d === "object") {
+            const sub = withoutDefaults(v, d);
+            if (Object.keys(sub).length) out[k] = sub;
+            return;
+        }
+        out[k] = v;
+    });
+    return out;
+}
+
+/* the code a question page / builder / server needs for this check */
+function codeText(rules, rubric, reference) {
+    const ref = JSON.stringify(reference, function (k, v) { return k === "src" ? undefined : v; });
+    return [
+        "// mathCheck " + MathCheck.version + " - in a page: <script src=\"mathCheck.js\"><\/script>; in Node: const MathCheck = require(\"./mathCheck.js\");",
+        "",
+        "// the reference answer: the semantic AST of the keyboard (keyboard.getAST())",
+        "const reference = " + ref + ";",
+        "",
+        "// the comparison rules - only the settings that differ from MathCheck.defaults.rules",
+        "const rules = " + JSON.stringify(withoutDefaults(rules, MathCheck.defaults.rules), null, 2) + ";",
+        "",
+        "// the rubric - its categories replace the default table",
+        "const rubric = " + JSON.stringify(rubric, null, 2) + ";",
+        "",
+        "// student: the student's keyboard.getAST() (an object or its JSON text)",
+        "function checkAnswer(student) {",
+        "    const result = MathCheck.compare(student, reference, rules, rubric, { language: \"" + $("language").value + "\" });",
+        "    // result.grade: 0-100; result.feedback: text with \\( \\) LaTeX; result.items: the errors and notes",
+        "    return result;",
+        "}",
+        ""
+    ].join("\n");
+}
+
+$("copyCode").addEventListener("click", function () {
+    const text = $("code").value;
+    const done = function () { $("copyMsg").textContent = "Copied."; setTimeout(function () { $("copyMsg").textContent = ""; }, 2000); };
+    const fallback = function () {
+        $("code").select();
+        try { document.execCommand("copy"); done(); } catch (e) { $("copyMsg").textContent = "Select the text and press Ctrl+C."; }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+});
 
 function readRules() {
     const tol = $("tolerance").value;
@@ -232,12 +413,12 @@ function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").
 
 function check() {
     const rules = readRules();
-    $("rulesJson").value = JSON.stringify(rules, null, 1);
     let rubric;
     try { rubric = JSON.parse($("rubric").value); $("rubricMsg").textContent = MathCheck.validateRubric(rubric).join(" · "); }
     catch (e) { $("rubricMsg").textContent = "Rubric JSON: " + e.message; return; }
 
     const ref = refKbd.getAST(), stu = stuKbd.getAST();
+    $("code").value = codeText(rules, rubric, ref);
     const result = MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
 
     $("grade").textContent = result.grade + "%";
@@ -323,6 +504,7 @@ function solutionRows(d, vars, f) {
             part("Inside the domain - solutions of the student's equation", d.domainSolutions.student) : "");
 }
 schedule();
+}
 </script>
 </body>
 </html>

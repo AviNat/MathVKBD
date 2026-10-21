@@ -7,6 +7,7 @@
  *   tuple[1, 2]  set{1, 2}         sin(x)  sqrt((+ x 1))  log_2(8)        x_1  indexed variable
  *   simpleFraction<numerator=1 denominator=2>  (other structures: type<part=value ...>)
  *   a ‖ b                          chain elements (the main-panel "=")
+ *   vec(AB)  the vector from A to B   vec(v)  a one-letter vector
  *
  * The browser harness also runs end-to-end cases typed with the real keyboard (kbdTests.js key notation).
  */
@@ -75,6 +76,15 @@ function parseNode(text) {
         if (num) { i += num[0].length; return { type: "number", value: num[0] }; }
 
         const name = ident();
+        /* vec(AB): the vector from A to B, as the keyboard gives it (name.points); vec(v): a one-letter vector */
+        if (name === "vec" && peek() === "(") {
+            i += 1;
+            const text = ident();
+            expect(")");
+            const point = function (p) { return { type: "variableName", name: p, subscript: null }; };
+            return text.length === 2 ? { type: "vector", name: { type: "variableName", name: text, subscript: null, points: [point(text[0]), point(text[1])] } }
+                : { type: "vector", name: point(text) };
+        }
         if (name === "tuple" && peek() === "[") { i += 1; return { type: "tuple", elements: list("]") }; }
         if (name === "list" && peek() === "[") { i += 1; return { type: "list", items: list("]") }; }
         if (name === "set" && peek() === "{") { i += 1; return { type: "set", elements: list("}") }; }
@@ -142,6 +152,16 @@ const CASES = [
     { group: "Functions", name: "asinh(x) = ln(x + √(x²+1))", ref: "asinh(x)", student: "ln((+ x sqrt((+ (^ x 2) 1))))", expect: { grade: 100 } },
     { group: "Functions", name: "atanh for tanh", ref: "tanh(x)", student: "atanh(x)", rules: { value: { variables: { x: { min: -0.9, max: 0.9 } } } }, expect: { grade: 0 } },
     { group: "Functions", name: "y = asin(x) as sin(y) = x? (no: other branches)", ref: "y ‖ asin(x)", student: "sin(y) ‖ x", expect: { grade: 0 } },
+    { group: "Vectors", name: "CB + BA = CA for AB + BC = AC (all reversed)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(CB) vec(BA)) ‖ vec(CA)", expect: { grade: 100 } },
+    { group: "Vectors", name: "BC + AB = AC (order of the terms)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(BC) vec(AB)) ‖ vec(AC)", expect: { grade: 100, equivalence: "commutative" } },
+    { group: "Vectors", name: "AB − CB = AC (one reversed, with a minus)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(AB) (neg vec(CB))) ‖ vec(AC)", expect: { grade: 100 } },
+    { group: "Vectors", name: "AB + BC = CA: wrong direction", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(AB) vec(BC)) ‖ vec(CA)", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Vectors", name: "AB + CB = AC: one reversed without a minus", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(AB) vec(CB)) ‖ vec(AC)", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Vectors", name: "expression: −BA for AB", ref: "vec(AB)", student: "(neg vec(BA))", expect: { grade: 100, equivalence: "numberForms" } },
+    { group: "Vectors", name: "expression: BA for AB", ref: "vec(AB)", student: "vec(BA)", expect: { grade: 0, codes: ["sign-error"] } },
+    { group: "Vectors", name: "2u + 3v as 3v + 2u", ref: "(+ (* 2 vec(u)) (* 3 vec(v)))", student: "(+ (* 3 vec(v)) (* 2 vec(u)))", expect: { grade: 100, equivalence: "commutative" } },
+    { group: "Vectors", name: "structural: CB + BA = CA", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(CB) vec(BA)) ‖ vec(CA)", rules: { value: { mode: "structural" } }, expect: { grade: 100, equivalence: "equationForms" } },
+    { group: "Vectors", name: "structural, reversal not accepted", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(CB) vec(BA)) ‖ vec(CA)", rules: { value: { mode: "structural" }, equivalence: { vectorReversal: false } }, expect: { grade: 0 } },
     { group: "Function values", name: "sin(π/2) = 1", ref: "1", student: "sin((/ pi 2))", expect: { grade: 100, equivalence: "numberForms" } },
     { group: "Function values", name: "cos π = −1", ref: "(neg 1)", student: "cos(pi)", expect: { grade: 100, equivalence: "numberForms" } },
     { group: "Function values", name: "tan(π/4) = 1", ref: "1", student: "tan((/ pi 4))", expect: { grade: 100, equivalence: "numberForms" } },
@@ -288,6 +308,7 @@ const CASES = [
 const E2E = [
     { name: "2(x+1) typed, 2x+2 typed", refKeys: "2 ( x + 1", studentKeys: "2 x + 2", expect: { grade: 100, equivalence: "distributive" } },
     { name: "sin⁻¹ x typed, π/2 − cos⁻¹ x typed", refKeys: "asin x", studentKeys: "π / 2 → - acos x", expect: { grade: 100 } },
+    { name: "CB⃗ + BA⃗ = CA⃗ typed for AB⃗ + BC⃗ = AC⃗", refKeys: "vec A B → + vec B C → = vec A C", studentKeys: "vec C B → + vec B A → = vec C A", expect: { grade: 100 } },
     { name: "sin(π/2) typed for 1", refKeys: "1", studentKeys: "sin π / 2", expect: { grade: 100, equivalence: "numberForms" } },
     { name: "d/dx sin x² typed back for 2x cos x²", refKeys: "2 x cos x ^2", studentKeys: "d/dx x → sin x ^2", expect: { grade: 0, codes: ["not-evaluated"] } },
     { name: "x y = 8 typed, y = 8/x typed", refKeys: "x y = 8", studentKeys: "y = 8 / x", expect: { grade: 100, equivalence: "sameSolutions" } },

@@ -96,6 +96,19 @@ Only inside brackets:
 - `x = 2, 3` **is not accepted** (mathematically wrong). Students will write it, so it should be recognized
   and given specific feedback ("write x=2 ∨ x=3"); internally it can be converted to `OR` so the values can still be checked.
 
+### Panels and the `=` key (2026-10-21)
+- **An empty panel has no button** (done 2026-10-21): the main-panel buttons Functions `f()…`, Structures `∫∑` and
+  Symbols `∞≤` are created only when the configuration puts a key in the panel (`panelHasContent`: any `functions`
+  flag; any `structures` flag, a vector notation or `complexNumbers` for the conjugate; any enabled symbol group).
+  The Variables panel always has the constant `e`, so its button stays. A numbers-only keyboard
+  (`variables: []`, `functions: {}`, `structures: {}`, `symbols: {}`) shows no empty panels.
+- **Number of `=` signs - pending (the user, 2026-10-21: "leave it for now"):** v4 has only `enableEquals`
+  (the main-panel `=` on / off, any number of times). The older STEMkbd keyboard has `maxEquals`: `0` - no `=` key,
+  `n` - at most `n` signs (the key and the computer key are ignored after that), e.g. `1` for "an equation",
+  `2`-`4` for a chain of steps. To add to v4 the same way (`insertEquals` checks the number of chain elements;
+  `enableEquals: true` = no limit). Until then a page can limit it itself - `keyboardExamples.html` example 3
+  wraps `insertEquals` on its keyboard.
+
 ---
 
 ## 3. Representations
@@ -347,3 +360,4 @@ check: {
 - Does a derivation need to be a required kind of answer?
 - Whether `semanticSequence` output keeps ids (section 3).
 - Whether postfix is already a structure (`wrapPreviousPostfix`).
+- `maxEquals` for v4 (as in STEMkbd) - pending, see section 2 "Panels and the `=` key".

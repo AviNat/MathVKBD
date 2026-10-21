@@ -2881,7 +2881,8 @@ MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCur
         return out;
     }
 
-    if (!suppressCursor) {
+    /* the cursor only in the editing view - never in getLatex() (the answer) */
+    if (!suppressCursor && editing) {
         out += this.cursorLatexForSequence(seq, 0);
     }
 
@@ -2910,7 +2911,7 @@ MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCur
             out += this.renderNode(item, editing);
         }
 
-        if (!suppressCursor) {
+        if (!suppressCursor && editing) {
             out += this.cursorLatexForSequence(seq, i + 1);
         }
     }
@@ -3921,15 +3922,22 @@ MoodleMathKeyboard.prototype.buildMainPanel = function () {
     this.makeButton(row, "x{.\\!.\\!.}", "Variables and constants", function () {
         self.togglePanel("variables");
     });
-    this.makeButton(row, "f(){.\\!.\\!.}", "Functions", function () {
-        self.togglePanel("functions");
-    });
-    this.makeButton(row, "\\int\\;\\sum", "Structures", function () {
-        self.togglePanel("structures");
-    });
-    this.makeButton(row, "\\infty\\;\\le", "Symbols", function () {
-        self.togglePanel("symbols");
-    });
+    /* a panel's button only when the configuration puts something in the panel */
+    if (this.panelHasContent("functions")) {
+        this.makeButton(row, "f(){.\\!.\\!.}", "Functions", function () {
+            self.togglePanel("functions");
+        });
+    }
+    if (this.panelHasContent("structures")) {
+        this.makeButton(row, "\\int\\;\\sum", "Structures", function () {
+            self.togglePanel("structures");
+        });
+    }
+    if (this.panelHasContent("symbols")) {
+        this.makeButton(row, "\\infty\\;\\le", "Symbols", function () {
+            self.togglePanel("symbols");
+        });
+    }
     if (this.config.withUnits) {
         this.makeButton(row, "[\\mathrm{u}]", "Select units", function() {
             self.togglePanel("units");
@@ -4064,6 +4072,40 @@ MoodleMathKeyboard.prototype.addPanelHeading = function (body, text) {
     div.style.marginTop = "4px";
     div.style.marginBottom = "2px";
     body.appendChild(div);
+};
+/*
+ * Does the configuration put any key in this panel? (Its button is not shown otherwise.) Must agree with the
+ * build...Panel functions. The variables panel always has the constant e.
+ */
+MoodleMathKeyboard.prototype.panelHasContent = function (panel) {
+    let config = this.config;
+    let any = function (flags, names) {
+        flags = flags || {};
+        return names.some(function (name) { return !!flags[name]; });
+    };
+    let groupName;
+
+    if (panel === "functions") {
+        return any(config.functions, ["logarithmic", "trigonometric", "inverseTrigonometric",
+            "hyperbolic", "inverseHyperbolic", "namedFunction"]);
+    }
+    if (panel === "structures") {
+        let structures = config.structures || {};
+        let vector = structures.vector === true ? "arrow" : structures.vector;
+        return any(structures, ["absoluteValue", "integral", "evaluation", "summation", "product", "limit",
+            "derivative", "partialDerivative"]) ||
+            vector === "arrow" || vector === "underline" || vector === "both" ||
+            !!config.complexNumbers;   // the conjugate
+    }
+    if (panel === "symbols") {
+        for (groupName in SYMBOL_GROUPS) {
+            if (Object.prototype.hasOwnProperty.call(SYMBOL_GROUPS, groupName) &&
+                config.symbols && config.symbols[SYMBOL_GROUPS[groupName].enabledBy]) return true;
+        }
+        return false;
+    }
+    if (panel === "units") return !!config.withUnits;
+    return true;
 };
 MoodleMathKeyboard.prototype.buildVariablesPanel = function (body) {
     let self = this;
