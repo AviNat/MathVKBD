@@ -532,6 +532,15 @@ function sortByKey(list) {
 
 function canonical(node, o) {
     if (!node) return { k: "other", key: "null" };
+    /*
+     * sin(π/2) = 1, ln e = 1, log₂8 = 3, sin(π/3) = √3/2, sin⁻¹1 = π/2, 1/√2 = √2/2: numbers with a function or a
+     * root in them, by their exact value (numericEvaluation)
+     */
+    if (o.numericEvaluation && node.type !== "number" && node.type !== "constant" && withFunction(node) &&
+        !hasVariable(node) && !usesPlusMinus(node)) {
+        const exact = exactValue(node, o);
+        if (exact) return exact;
+    }
     switch (node.type) {
         case "number": {
             const isDec = String(node.value).indexOf(".") >= 0;
@@ -576,6 +585,40 @@ function canonical(node, o) {
     }
     /* structures not normalized yet: exact (without ids) */
     return { k: "other", key: JSON.stringify(stripSrc(node)) };
+}
+
+function withFunction(node) {
+    let found = false;
+    walk(node, function (n) { if (n.type === "function" || n.type === "nthRoot") found = true; });
+    return found;
+}
+
+/*
+ * The value of a node without variables as an exact canonical number, when it is one: p/q, (p/q)·√b (b square-free)
+ * or (p/q)·π, with q ≤ 12 and b ≤ 30. null otherwise (sin 1 stays sin 1).
+ */
+function exactValue(node, o) {
+    let v;
+    try { v = evaluate(node, { vars: {}, s: 1 }); } catch (e) { return null; }
+    if (!isFinite(v)) return null;
+    const near = function (x, y) { return Math.abs(x - y) <= 1e-11 * Math.max(1, Math.abs(y)); };
+    const asRat = function (x) {
+        for (let q = 1; q <= 12; q += 1) {
+            const p = Math.round(x * q);
+            if (Math.abs(p) <= 1e6 && near(x, p / q)) return rat(p, q);
+        }
+        return null;
+    };
+    let r = asRat(v);
+    if (r) return num(r);
+    const SQUARE_FREE = [2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19, 21, 22, 23, 26, 29, 30];
+    for (let i = 0; i < SQUARE_FREE.length; i += 1) {
+        r = asRat(v / Math.sqrt(SQUARE_FREE[i]));
+        if (r) return cmul([num(r), cpow(num(rat(SQUARE_FREE[i])), num(rat(1, 2)), o)], o);
+    }
+    r = asRat(v / Math.PI);
+    if (r) return cmul([num(r), { k: "const", name: "pi" }], o);
+    return null;
 }
 
 function crel(op, l, r, o) {
