@@ -43,6 +43,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 .status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
 pre.code { margin: 0; background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 12px 14px;
            font: 12.5px/1.5 Consolas, monospace; overflow-x: auto; }
+.code-wrap { position: relative; }
+.copy-btn { position: absolute; top: 8px; right: 8px; font: 12px "Segoe UI", Arial, sans-serif; padding: 3px 10px;
+            border: 1px solid #3a5372; border-radius: 6px; background: #1c3350; color: #e3ebf5; cursor: pointer; }
+.copy-btn:hover { background: #26446a; }
 details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 8px; }
 code { font-family: Consolas, monospace; background: #eef3f8; padding: 0 4px; border-radius: 4px; }
 </style>
@@ -254,6 +258,47 @@ $("codeRouting").textContent =
     "    if (active) active.handlePhysicalKey(event);\n" +
     "});\n\n" +
     "// with a single keyboard on the page none of this is needed: physicalKeyboard is on by default";
+
+/* ---------- a Copy button on every code block ---------- */
+function copyText(text, button) {
+    const done = function () {
+        button.textContent = "Copied ✓";
+        setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    };
+    const fallback = function () {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        area.remove();
+        if (ok) { done(); return; }
+        /* no clipboard: select the code itself so Ctrl+C copies it */
+        const range = document.createRange();
+        range.selectNodeContents(button.parentNode.querySelector("pre"));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        button.textContent = "Ctrl+C";
+        setTimeout(function () { button.textContent = "Copy"; }, 2500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+}
+document.querySelectorAll("pre.code").forEach(function (pre) {
+    const wrap = document.createElement("div");
+    wrap.className = "code-wrap";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copy-btn";
+    button.textContent = "Copy";
+    button.addEventListener("click", function () { copyText(pre.textContent, button); });
+    wrap.appendChild(button);
+});
 </script>
 </body>
 </html>

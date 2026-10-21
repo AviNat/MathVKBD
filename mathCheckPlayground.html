@@ -100,6 +100,15 @@ tr.hit td { background: #e6f4ea; }
   </section>
 
   <section class="wide">
+    <h2>Reference answer JSON
+      <button type="button" id="copyRef" style="margin-inline-start:10px">Copy</button>
+      <span id="copyRefMsg" class="hint"></span></h2>
+    <div class="hint">The semantic AST of the reference answer (the left keyboard), without the editor ids - the value
+      to store with the question and pass to <code>MathCheck.compare(student, reference, …)</code> as the reference.</div>
+    <textarea id="refJson" readonly spellcheck="false" style="height:80px"></textarea>
+  </section>
+
+  <section class="wide">
     <h2>Result</h2>
     <div id="errors" style="color:var(--bad)"></div>
     <div><span id="grade"></span> <span id="matched" class="hint"></span></div>
@@ -312,16 +321,21 @@ function codeText(rules, rubric, reference) {
     ].join("\n");
 }
 
-$("copyCode").addEventListener("click", function () {
-    const text = $("code").value;
-    const done = function () { $("copyMsg").textContent = "Copied."; setTimeout(function () { $("copyMsg").textContent = ""; }, 2000); };
+/* copy a read-only text box; the message next to its button says it worked */
+function copyFrom(areaId, msgId) {
+    const text = $(areaId).value;
+    const done = function () { $(msgId).textContent = "Copied."; setTimeout(function () { $(msgId).textContent = ""; }, 2000); };
     const fallback = function () {
-        $("code").select();
-        try { document.execCommand("copy"); done(); } catch (e) { $("copyMsg").textContent = "Select the text and press Ctrl+C."; }
+        $(areaId).select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        if (ok) done(); else $(msgId).textContent = "Selected - press Ctrl+C.";
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
     else fallback();
-});
+}
+$("copyCode").addEventListener("click", function () { copyFrom("code", "copyMsg"); });
+$("copyRef").addEventListener("click", function () { copyFrom("refJson", "copyRefMsg"); });
 
 function readRules() {
     const tol = $("tolerance").value;
@@ -418,6 +432,7 @@ function check() {
     catch (e) { $("rubricMsg").textContent = "Rubric JSON: " + e.message; return; }
 
     const ref = refKbd.getAST(), stu = stuKbd.getAST();
+    $("refJson").value = JSON.stringify(ref, function (k, v) { return k === "src" ? undefined : v; });
     $("code").value = codeText(rules, rubric, ref);
     const result = MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
 
