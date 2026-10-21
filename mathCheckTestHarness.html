@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>mathCheck - tests</title>
+<script src="fullKbdLib-v4.js"></script>
+<script src="kbdTests.js"></script>
+<script src="mathCheck.js"></script>
+<script src="mathCheckTests.js"></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 16px; color: #1d2733; }
+#summary { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid #dde3ea; padding: 5px 8px; text-align: left; vertical-align: top; }
+th { background: #eef3f8; }
+tr.fail td { background: #fdecec; }
+td.code { font-family: Consolas, monospace; }
+.ok { color: #1a7f37; font-weight: bold; } .bad { color: #b42318; font-weight: bold; }
+h2 { font-size: 16px; margin: 18px 0 6px; }
+#host { position: absolute; left: -9999px; top: 0; }
+</style>
+</head>
+<body>
+<div id="summary"></div>
+<h2>Cases (compact notation - the same as <code>node mathCheckTests.js</code>)</h2>
+<table id="cases"><tr><th>Group</th><th>Case</th><th>Student / reference</th><th>Grade</th><th>Result</th><th>Feedback</th></tr></table>
+<h2>End to end (typed with the keyboard)</h2>
+<table id="e2e"><tr><th>Case</th><th>Student keys / reference keys</th><th>Grade</th><th>Result</th><th>Feedback</th></tr></table>
+<div id="host"></div>
+<script>
+function row(table, cells, pass) {
+    const tr = document.createElement("tr");
+    if (!pass) tr.className = "fail";
+    cells.forEach(function (c, i) {
+        const td = document.createElement("td");
+        if (c && c.code) { td.className = "code"; td.textContent = c.text; }
+        else td.textContent = c;
+        tr.appendChild(td);
+    });
+    document.getElementById(table).appendChild(tr);
+}
+const results = MathCheckTests.run(MathCheck);
+results.forEach(function (r) {
+    const c = r.testCase;
+    row("cases", [c.group, c.name, { code: true, text: c.student + "\n" + (c.refs ? c.refs.join(" | ") : c.ref) },
+        r.result ? r.result.grade : "-", r.pass ? "ok" : (r.error || r.problems.join("; ")),
+        r.result ? r.result.feedback : ""], r.pass);
+});
+const e2e = MathCheckTests.runE2E(MathCheck, MoodleMathKeyboard, KbdTests, document.getElementById("host"));
+e2e.forEach(function (r) {
+    const c = r.testCase;
+    row("e2e", [c.name, { code: true, text: c.studentKeys + "\n" + c.refKeys }, r.result ? r.result.grade : "-",
+        r.pass ? "ok" : (r.error || r.problems.join("; ")), r.result ? r.result.feedback : ""], r.pass);
+});
+const all = results.concat(e2e), failed = all.filter(function (r) { return !r.pass; }).length;
+document.getElementById("summary").innerHTML = "mathCheck " + MathCheck.version + ": " +
+    "<span class='" + (failed ? "bad" : "ok") + "'>" + (all.length - failed) + " passed, " + failed + " failed</span> of " + all.length +
+    " (" + results.length + " cases, " + e2e.length + " end to end)";
+</script>
+</body>
+</html>

@@ -14,6 +14,27 @@
 (function () {
 "use strict";
 /* ============================================================
+   MATHJAX QUEUE
+   All typesetting of this library (the display of every keyboard, the button labels) runs one after another, and
+   the first only after MathJax has started - its own first pass over the page included. Run together, they replaced
+   each other's content ("Uncaught Error at e.replace ... updateDocument") and broke MathJax's on-demand loading of
+   the html extension (\cssId): the display then showed the raw LaTeX "\cssId{mathKbdCursorMarker1}{|}"
+   (fullKBDHarness.html, which loads MathJax without preloading [tex]/html, 2026-10-21).
+   ============================================================ */
+let MATHJAX_CHAIN = null;
+
+/* task: a function returning a promise (or nothing). Resolves / rejects with the task; the queue goes on either way. */
+function queueMathJax(task) {
+    let mj = window.MathJax;
+    if (!mj || !mj.typesetPromise) {
+        return Promise.reject(new Error("MathJax is not loaded"));
+    }
+    let start = MATHJAX_CHAIN || (mj.startup && mj.startup.promise) || Promise.resolve();
+    let run = start.then(task);
+    MATHJAX_CHAIN = run.catch(function () {});
+    return run;
+}
+/* ============================================================
    DEFAULT CONFIGURATION
    ============================================================ */
 let DEFAULT_CONFIG = {
@@ -3530,9 +3551,9 @@ MoodleMathKeyboard.prototype.typesetButtons = function (root) {
     if (!window.MathJax || !window.MathJax.typesetPromise || buttons.length === 0) {
         return;
     }
-    window.MathJax.typesetPromise(
-        Array.prototype.slice.call(buttons)
-    ).catch(function (error) {
+    queueMathJax(function () {
+        return window.MathJax.typesetPromise(Array.prototype.slice.call(buttons));
+    }).catch(function (error) {
         console.error("MathJax button error:", error);
     });
 };
@@ -6517,7 +6538,8 @@ MoodleMathKeyboard.prototype.render = function (ast) {
         return;
     }
 
-    this.mathJaxPromise = this.mathJaxPromise.then(function () {
+    /* through the shared queue (see MATHJAX QUEUE): never at the same time as another typesetting */
+    this.mathJaxPromise = queueMathJax(function () {
         if (window.MathJax.typesetClear) {
             window.MathJax.typesetClear([self.display]);
         }

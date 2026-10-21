@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mathCheck playground</title>
+<script>
+window.MathJax = {
+    loader: { load: ["[tex]/html"] },
+    tex: { packages: { "[+]": ["html"] }, inlineMath: [["\\(", "\\)"]] },
+    svg: { fontCache: "global" }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script src="fullKbdLib-v4.js"></script>
+<script src="kbdTests.js"></script>
+<script src="mathCheck.js"></script>
+<style>
+:root { --line: #d5dce4; --muted: #5b6876; --accent: #1f5f99; --ok: #1a7f37; --bad: #b42318; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 "Segoe UI", Arial, sans-serif; color: #1d2733; background: #f4f6f9; }
+header { background: #13314f; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; }
+header .sub { opacity: .8; font-size: 12px; }
+header label { margin-inline-start: auto; }
+main { padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+section { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+section h2 { font-size: 15px; margin: 0 0 8px; }
+.wide { grid-column: 1 / -1; }
+.kbd { border: 2px solid transparent; border-radius: 8px; padding: 4px; }
+.kbd.active { border-color: var(--accent); }
+.hint { color: var(--muted); font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; }
+.grid label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+select, input[type=number], input[type=text] { font: inherit; padding: 2px 4px; border: 1px solid var(--line); border-radius: 5px; }
+h3 { font-size: 13px; margin: 12px 0 6px; color: var(--accent); }
+textarea { width: 100%; height: 170px; font: 12px Consolas, monospace; border: 1px solid var(--line); border-radius: 6px; }
+#grade { font-size: 28px; font-weight: bold; }
+#feedback { white-space: pre-wrap; background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; }
+th, td { border-bottom: 1px solid #e3e8ee; padding: 4px 6px; text-align: start; vertical-align: top; }
+th { background: #eef3f8; }
+td.mono { font-family: Consolas, monospace; direction: ltr; text-align: left; word-break: break-all; }
+tr.hit td { background: #e6f4ea; }
+.yes { color: var(--ok); font-weight: bold; } .no { color: var(--bad); }
+#rubricMsg { color: var(--bad); font-size: 12px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>mathCheck playground</h1>
+  <span class="sub">Type a reference answer and a student answer; the check runs on every change. Click a keyboard to type into it with the computer keyboard.</span>
+  <label>Feedback language
+    <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
+  </label>
+</header>
+<main>
+  <section>
+    <h2>Reference answer</h2>
+    <div id="refHost" class="kbd"></div>
+  </section>
+  <section>
+    <h2>Student answer</h2>
+    <div id="stuHost" class="kbd"></div>
+  </section>
+
+  <section class="wide">
+    <h2>Result</h2>
+    <div id="errors" style="color:var(--bad)"></div>
+    <div><span id="grade"></span> <span id="matched" class="hint"></span></div>
+    <div id="feedback"></div>
+    <table id="items"></table>
+  </section>
+
+  <section class="wide">
+    <h2>How the equivalence is computed</h2>
+    <div class="hint">Each step of the ladder adds laws; both answers are written in a canonical form with the laws so far.
+      The first step where the two forms are identical is the equivalence found. Laws set to "not accepted" are left out.
+      The last step, equationForms, writes an equation or relation as (left − right) = 0 divided by its leading coefficient,
+      so moving terms between the sides and multiplying both sides by a number give the same form.
+      (In numeric mode the grade comes from the sample points below; the ladder tells which difference was accepted.)</div>
+    <table id="ladder"></table>
+    <h3>Sample points (numeric mode)</h3>
+    <table id="points"></table>
+  </section>
+
+  <section>
+    <h2>Rules</h2>
+    <div class="grid">
+      <label>Answer kind
+        <select id="answerKind">
+          <option>auto</option><option>expression</option><option>equation</option><option>inequality</option>
+          <option>statement</option><option>set</option><option>tuple</option><option>derivation</option>
+        </select></label>
+      <label>Value mode <select id="mode"><option>numeric</option><option>structural</option><option>exact</option></select></label>
+      <label>Sample points <input type="number" id="samples" min="3" max="40" value="8"></label>
+      <label>Tolerance
+        <select id="tolerance"><option value="rel">relative 1e-9</option><option value="d2">2 decimals</option><option value="d3">3 decimals</option></select></label>
+      <label>Variable range <span><input type="number" id="rmin" value="-4" style="width:56px"> .. <input type="number" id="rmax" value="4" style="width:56px"></span></label>
+      <label>Scaled equations (2x=4 for x=2) <input type="checkbox" id="scaleEquation" checked></label>
+      <label>Same solutions (y=8/x for xy=8) <select id="sameSolutions"><option value="true">accept</option><option value="note">accept + note</option><option value="false">not accepted</option></select></label>
+      <label title="Equivalent only inside this domain: partial credit (rubric category domain). Several: y: -pi/2 .. pi/2; x: 0 ..">Domain (partial) <input type="text" id="domain" size="14" placeholder="y: -pi/2 .. pi/2"></label>
+      <label>Derivation <select id="derivation"><option>lastOnly</option><option>allSteps</option></select></label>
+      <label>Diagnose a wrong value <input type="checkbox" id="diagnosis" checked></label>
+    </div>
+    <h3>Equivalence laws</h3>
+    <div class="grid" id="laws"></div>
+    <h3>Form checks (only when the value is right)</h3>
+    <div class="grid" id="forms"></div>
+    <div class="grid" style="margin-top:6px"><label>Isolated variable <input type="text" id="isolated" size="4" placeholder="x"></label></div>
+  </section>
+
+  <section>
+    <h2>Rubric</h2>
+    <div class="hint">JSON: categories with mode once / each / none, points, max. The diagnosis categories (sign, factor,
+      scale, term) are graded as "value" until they are set here.</div>
+    <textarea id="rubric" spellcheck="false"></textarea>
+    <div id="rubricMsg"></div>
+    <h3>Rules as sent to compare</h3>
+    <textarea id="rulesJson" readonly spellcheck="false" style="height:120px"></textarea>
+  </section>
+</main>
+
+<script>
+const $ = function (id) { return document.getElementById(id); };
+const VARIABLES = ["x", "y", "z", "a", "b", "n", "t"].map(function (v) { return { id: v, label: v, latex: v }; })
+    .concat([{ id: "alpha", label: "α", latex: "\\alpha" }]);
+const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "likeTerms", "distributive", "equationTransforms"];
+const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "exactValue"];
+let timer = null, active = null, mjChain = null;
+window.addEventListener("error", function (e) { $("errors").textContent = "Error: " + e.message; });
+
+/* controls */
+LAWS.forEach(function (law) {
+    $("laws").insertAdjacentHTML("beforeend", "<label>" + law + " <select data-law='" + law + "'>" +
+        "<option value='true'>accept</option><option value='note'>accept + note</option><option value='false'>not accepted</option></select></label>");
+});
+FORMS.forEach(function (f) {
+    $("forms").insertAdjacentHTML("beforeend", "<label>" + f + " <select data-form='" + f + "'>" +
+        "<option>off</option><option>note</option><option>error</option></select></label>");
+});
+$("rubric").value = JSON.stringify(MathCheck.defaults.rubric, null, 1);
+
+function readRules() {
+    const tol = $("tolerance").value;
+    const rules = {
+        answerKind: $("answerKind").value,
+        value: {
+            mode: $("mode").value,
+            samples: Number($("samples").value) || 8,
+            tolerance: tol === "rel" ? { relative: 1e-9, absolute: 1e-12 } : { decimals: tol === "d2" ? 2 : 3 },
+            domain: { min: Number($("rmin").value), max: Number($("rmax").value) }
+        },
+        equivalence: {},
+        form: {},
+        statements: {
+            scaleEquation: $("scaleEquation").checked, derivation: $("derivation").value,
+            sameSolutions: $("sameSolutions").value === "note" ? "note" : $("sameSolutions").value === "true"
+        },
+        diagnosis: $("diagnosis").checked
+    };
+    document.querySelectorAll("[data-law]").forEach(function (s) {
+        rules.equivalence[s.dataset.law] = s.value === "note" ? "note" : s.value === "true";
+    });
+    document.querySelectorAll("[data-form]").forEach(function (s) { if (s.value !== "off") rules.form[s.dataset.form] = s.value; });
+    if ($("isolated").value.trim()) rules.form.isolatedVariable = $("isolated").value.trim();
+    /* "y: -pi/2 .. pi/2; x: 0 .." -> { y: { min: "-pi/2", max: "pi/2" }, x: { min: "0" } } */
+    const domain = {};
+    $("domain").value.split(";").forEach(function (part) {
+        const m = /^\s*([A-Za-z]\w*)\s*:\s*([^.]*?)\s*\.\.\s*(.*?)\s*$/.exec(part);
+        if (!m) return;
+        domain[m[1]] = {};
+        if (m[2]) domain[m[1]].min = m[2];
+        if (m[3]) domain[m[1]].max = m[3];
+    });
+    if (Object.keys(domain).length) rules.statements.domain = domain;
+    return rules;
+}
+
+/* MathJax: one typesetting at a time, after start-up (the keyboards typeset too) */
+function typeset(el) {
+    if (!window.MathJax || !MathJax.typesetPromise) return;
+    mjChain = (mjChain || MathJax.startup.promise).then(function () {
+        if (MathJax.typesetClear) MathJax.typesetClear([el]);
+        return MathJax.typesetPromise([el]);
+    }).catch(function () {});
+}
+
+/* keyboards; physical keys go to the active one only (each keyboard alone would take every key on the page) */
+function makeKeyboard(hostId) {
+    const k = new MoodleMathKeyboard({
+        /* every option, as in FullKBD.html - mathCheck answers "unsupported" for what it cannot evaluate yet */
+        divId: hostId, physicalKeyboard: false, variables: VARIABLES, complexNumbers: true, enableEquals: true,
+        multiplicationSymbol: "cdot", showImplicitMultiply: true, placeholderTooltips: true, sets: true,
+        acceptLowercaseVariables: true, acceptUppercaseVariables: true,
+        functions: {
+            logarithmic: true, trigonometric: true, inverseTrigonometric: true,
+            hyperbolic: true, inverseHyperbolic: true, namedFunction: true
+        },
+        structures: {
+            integral: true, evaluation: true, summation: true, product: true, limit: true,
+            absoluteValue: true, vector: "both", derivative: true, partialDerivative: true
+        },
+        symbols: { general: true, relations: true, logic: true, geometry: true },
+        withUnits: true,
+        unitCategories: { length: true, area: true, volume: true, time: true, speed: true, acceleration: true, angle: true },
+        onChange: function () { schedule(); }
+    });
+    $(hostId).addEventListener("mousedown", function () { setActive(k, hostId); });
+    return k;
+}
+function setActive(k, hostId) {
+    active = k;
+    document.querySelectorAll(".kbd").forEach(function (h) { h.classList.toggle("active", h.id === hostId); });
+}
+document.addEventListener("keydown", function (e) { if (active) active.handlePhysicalKey(e); });
+
+const refKbd = makeKeyboard("refHost"), stuKbd = makeKeyboard("stuHost");
+setActive(stuKbd, "stuHost");
+/* a first example: 2(x+1) and 2x+2 */
+"2 ( x + 1".split(" ").forEach(function (key) { KbdTests.pressKey(refKbd, key); });
+"2 x + 2".split(" ").forEach(function (key) { KbdTests.pressKey(stuKbd, key); });
+
+function schedule() { clearTimeout(timer); timer = setTimeout(check, 150); }
+document.querySelectorAll("select, input, textarea").forEach(function (el) {
+    el.addEventListener("change", schedule);
+    el.addEventListener("input", schedule);
+});
+
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+function check() {
+    const rules = readRules();
+    $("rulesJson").value = JSON.stringify(rules, null, 1);
+    let rubric;
+    try { rubric = JSON.parse($("rubric").value); $("rubricMsg").textContent = MathCheck.validateRubric(rubric).join(" · "); }
+    catch (e) { $("rubricMsg").textContent = "Rubric JSON: " + e.message; return; }
+
+    const ref = refKbd.getAST(), stu = stuKbd.getAST();
+    const result = MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
+
+    $("grade").textContent = result.grade + "%";
+    $("grade").style.color = result.grade === 100 ? "var(--ok)" : "var(--bad)";
+    $("matched").textContent = "equivalence: " + (result.matched.equivalence || "by value only / none") + " · version " + result.version;
+    $("feedback").textContent = result.feedback;
+    $("feedback").dir = $("language").value === "en" ? "ltr" : "rtl";
+    typeset($("feedback"));
+
+    $("items").innerHTML = "<tr><th>kind</th><th>code</th><th>category</th><th>penalty</th><th>counted</th><th>message</th></tr>" +
+        result.items.map(function (it) {
+            return "<tr><td>" + it.kind + "</td><td class='mono'>" + it.code + "</td><td>" + (it.category || "") + "</td><td>" +
+                (it.penalty || "") + "</td><td>" + (it.kind === "error" ? it.counted : "") + "</td><td>" + esc(it.message) + "</td></tr>";
+        }).join("") + (result.items.length ? "" : "<tr><td colspan='6' class='hint'>No errors or notes.</td></tr>");
+    typeset($("items"));
+
+    /* the ladder */
+    const step = result.matched.equivalence;
+    $("ladder").innerHTML = "<tr><th>step</th><th>laws added</th><th>student (canonical)</th><th>reference (canonical)</th><th>same</th></tr>" +
+        MathCheck.ladder.map(function (l) {
+            const s = MathCheck.canonicalText(stu, rules, l.name), r = MathCheck.canonicalText(ref, rules, l.name);
+            const laws = l.laws.map(function (law) { return rules.equivalence[law] === false ? "<s>" + law + "</s>" : law; }).join(", ");
+            return "<tr class='" + (l.name === step ? "hit" : "") + "'><td>" + l.name + "</td><td>" + (laws || "-") + "</td><td class='mono'>" +
+                esc(s) + "</td><td class='mono'>" + esc(r) + "</td><td>" + (s === r ? "<span class='yes'>yes</span>" : "<span class='no'>no</span>") + "</td></tr>";
+        }).join("");
+
+    /* the sample points */
+    const d = result.debug || {};
+    const rows = d.rows || [], vars = d.vars || [];
+    const f = function (x) { return Number.isFinite(x) ? (Math.round(x * 1e6) / 1e6) : String(x); };
+    if (!rows.length) {
+        $("points").innerHTML = "<tr><td class='hint'>" + (d.unsupported ? "Not evaluated numerically: " + esc(d.unsupported) + " - the canonical form decides." :
+            rules.value.mode !== "numeric" ? "Value mode " + rules.value.mode + ": the canonical form decides." :
+            "No sample points for this kind of answer.") + "</td></tr>";
+    } else if (d.sampled === "left-right") {
+        /* equations / relations: left − right of each, equivalent when student = k · reference at every point */
+        $("points").innerHTML = "<tr><td colspan='" + (vars.length + 4) + "' class='hint'>Equations and relations are compared as left − right: " +
+            "equivalent when the student's is a constant multiple k of the reference's at every point (k = 1: terms moved; k ≠ 1: scaled" +
+            (rules.statements.scaleEquation ? "" : " - not accepted") + "; for &lt; and ≤, k must be positive). " +
+            "<b>k = " + (d.ratio === null || d.ratio === undefined ? "none (not a constant)" : f(d.ratio)) + "</b></td></tr>" +
+            "<tr>" + vars.map(function (v) { return "<th>" + v + "</th>"; }).join("") +
+            "<th>reference: left − right</th><th>student: left − right</th><th>student ÷ reference</th><th>same k</th></tr>" +
+            rows.map(function (row) {
+                const r = row.values[0][0], s = row.values[1][0];
+                const both0 = Math.abs(r) < 1e-12 && Math.abs(s) < 1e-9;
+                const q = Math.abs(r) < 1e-12 ? (both0 ? "0 / 0" : "∞") : f(s / r);
+                const ok = d.ratio !== null && d.ratio !== undefined && (both0 || (Math.abs(r) >= 1e-12 && Math.abs(s / r - d.ratio) <= 1e-7 * Math.max(1, Math.abs(d.ratio))));
+                return "<tr>" + vars.map(function (v) { return "<td class='mono'>" + f(row.env.vars[v]) + "</td>"; }).join("") +
+                    "<td class='mono'>" + f(r) + "</td><td class='mono'>" + f(s) + "</td><td class='mono'>" + q + "</td><td>" +
+                    (ok ? "<span class='yes'>✓</span>" : "<span class='no'>✗</span>") + "</td></tr>";
+            }).join("") + solutionRows(d, vars, f);
+    } else {
+        $("points").innerHTML = "<tr>" + vars.map(function (v) { return "<th>" + v + "</th>"; }).join("") +
+            "<th>reference</th><th>student</th><th>equal</th></tr>" +
+            rows.map(function (row) {
+                const r = row.values[0].map(f).join(" / "), s = row.values[1].map(f).join(" / ");
+                const eq = row.values[0].every(function (v, i) { return Math.abs(v - row.values[1][i]) <= 1e-9 * Math.max(1, Math.abs(v)); });
+                return "<tr>" + vars.map(function (v) { return "<td class='mono'>" + f(row.env.vars[v]) + "</td>"; }).join("") +
+                    "<td class='mono'>" + r + "</td><td class='mono'>" + s + "</td><td>" + (eq ? "<span class='yes'>✓</span>" : "<span class='no'>✗</span>") + "</td></tr>";
+            }).join("");
+    }
+}
+/* no constant k: the solution sets are compared - points found on each, checked in the other equation */
+function solutionRows(d, vars, f) {
+    if (d.ratio !== null && d.ratio !== undefined) return "";
+    const sol = d.solutions, n = vars.length + 4;
+    if (!sol) return "<tr><td colspan='" + n + "' class='hint'>Not a constant multiple. The solution sets were not compared " +
+        "(the rule is off, or too few solutions were found in the range).</td></tr>";
+    const part = function (title, list) {
+        return "<tr><td colspan='" + n + "'><b>" + title + "</b></td></tr>" + list.map(function (p) {
+            return "<tr>" + vars.map(function (v) { return "<td class='mono'>" + f(p.vars[v]) + "</td>"; }).join("") +
+                "<td colspan='3'></td><td>" + (p.holds ? "<span class='yes'>✓</span>" : "<span class='no'>✗</span>") + "</td></tr>";
+        }).join("");
+    };
+    return "<tr><td colspan='" + n + "' class='hint'>Not a constant multiple, so the solution sets are compared: points on each " +
+        "equation's solution set (one variable scanned, the root found by bisection) must solve the other equation too. " +
+        "<b>" + (sol.equal ? "Same solutions." : "Different solutions.") + "</b></td></tr>" +
+        part("Solutions of the reference - do they solve the student's equation?", sol.reference) +
+        part("Solutions of the student's equation - do they solve the reference?", sol.student) +
+        (d.domainSolutions ? "<tr><td colspan='" + n + "' class='hint'>Compared again inside the domain: <b>" +
+            (d.domainSolutions.equal ? "the same solutions there - partial credit (domain)." : "different there too.") + "</b></td></tr>" +
+            part("Inside the domain - solutions of the reference", d.domainSolutions.reference) +
+            part("Inside the domain - solutions of the student's equation", d.domainSolutions.student) : "");
+}
+schedule();
+</script>
+</body>
+</html>

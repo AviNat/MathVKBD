@@ -3,22 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Full Keyboard V2 Test</title>
-<script>
-window.MathJax = {
-    loader: {
-        load: ["[tex]/html"]
-    },
-    tex: {
-        packages: {
-            "[+]": ["html"]
-        },
-        inlineMath: [["\\(", "\\)"]]
-    },
-    svg: {
-        fontCache: "global"
-    }
-};
-</script>
+
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 
 <script src="https://lomdot.education.gov.il/mathhatab/vkeyboard/fullKbdLib-v4.js"></script>
@@ -85,7 +70,7 @@ let keyboard = new MoodleMathKeyboard({
         acceleration: true,
         angle: true
     },
-    debug: false,
+    debug: true,
     onChange: keyboardChanged
 });
 </script>

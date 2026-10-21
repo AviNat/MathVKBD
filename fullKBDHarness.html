@@ -1,7 +1,30 @@
-<div id="keyboardHost"></div>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Full keyboard - harness</title>
+<script>
+/* the html extension (\cssId - the cursor marker) loaded with MathJax, as in FullKBD.html */
+window.MathJax = {
+    loader: {
+        load: ["[tex]/html"]
+    },
+    tex: {
+        packages: {
+            "[+]": ["html"]
+        },
+        inlineMath: [["\\(", "\\)"]]
+    },
+    svg: {
+        fontCache: "global"
+    }
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <script src="fullKbdLib-v4.js"></script>
+</head>
+<body>
+<div id="keyboardHost"></div>
 
 <script>
 let keyboard = new MoodleMathKeyboard({
@@ -22,3 +45,5 @@ let keyboard = new MoodleMathKeyboard({
     }
 });
 </script>
+</body>
+</html>
