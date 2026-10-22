@@ -88,6 +88,16 @@ main[hidden] { display: none; }
 .kb-group legend { font-weight: 600; color: var(--accent); font-size: 13px; padding: 0 4px; }
 .kb-group .grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 #kbCode { height: 300px; }
+/* a checkbox before its text, both on the left (not the box at the far end of the line) */
+.grid label.check { justify-content: flex-start; gap: 6px; }
+.grid label.check input { margin: 0; flex: none; }
+.file-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.file-bar button { font: inherit; padding: 5px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+.file-bar button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+#fileName { font-weight: 600; }
+.dirty { color: #b54708; font-weight: 600; font-size: 12px; }
+#fileSummary td:first-child { font-weight: 600; white-space: nowrap; width: 150px; }
+#packageJson { height: 260px; }
 </style>
 </head>
 <body>
@@ -104,8 +114,36 @@ main[hidden] { display: none; }
 <nav class="tabs" role="tablist">
   <button type="button" role="tab" id="tabBtnKeyboard" aria-selected="false" aria-controls="tabKeyboard">1. Keyboard</button>
   <button type="button" role="tab" id="tabBtnChecker" aria-selected="true" aria-controls="tabChecker">2. Checker</button>
-  <span class="tab-note" id="kbSummary"></span>
+  <button type="button" role="tab" id="tabBtnFile" aria-selected="false" aria-controls="tabFile">3. Exercise file</button>
+  <span class="tab-note"><span id="dirtyMark" class="dirty"></span> <span id="kbSummary"></span></span>
 </nav>
+
+<!-- 3. the exercise file: keyboard + reference answer + rules + rubric, saved and opened together -->
+<main id="tabFile" role="tabpanel" hidden>
+  <section class="wide">
+    <h2>Exercise file</h2>
+    <div class="hint">One file holds everything an exercise needs - the student's keyboard (tab 1), the reference answer,
+      the rules and the rubric (tab 2) - so the parts always belong together. Open it again to change the exercise.</div>
+    <div class="file-bar">
+      <button type="button" id="openBtn">Open…</button>
+      <button type="button" id="saveBtn" class="primary">Save</button>
+      <button type="button" id="saveAsBtn">Save as…</button>
+      <span id="fileName">(new exercise)</span>
+      <span id="fileDirty" class="dirty"></span>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    </div>
+    <table id="fileSummary"></table>
+  </section>
+  <section class="wide">
+    <h2>The exercise package
+      <button type="button" id="copyPackage" style="margin-inline-start:10px">Copy</button>
+      <span id="copyPackageMsg" class="hint"></span></h2>
+    <div class="hint">The file's content. In the exercise page: create the keyboard from <code>keyboard</code>, and on
+      submit call <code>MathCheck.compare(keyboard.getAST(), reference, rules, rubric, { language })</code>.
+      The <code>playground</code> part is only for opening the file here again.</div>
+    <textarea id="packageJson" readonly spellcheck="false"></textarea>
+  </section>
+</main>
 
 <!-- 1. the keyboard the student gets: its settings, a preview, the code -->
 <main id="tabKeyboard" role="tabpanel" hidden>
@@ -189,12 +227,12 @@ main[hidden] { display: none; }
       <label>Tolerance
         <select id="tolerance"><option value="rel">relative 1e-9</option><option value="d2">2 decimals</option><option value="d3">3 decimals</option></select></label>
       <label>Variable range <span><input type="number" id="rmin" value="-4" style="width:56px"> .. <input type="number" id="rmax" value="4" style="width:56px"></span></label>
-      <label>Scaled equations (2x=4 for x=2) <input type="checkbox" id="scaleEquation" checked></label>
+      <label class="check"><input type="checkbox" id="scaleEquation" checked> Scaled equations (2x=4 for x=2)</label>
       <label>Same solutions (y=8/x for xy=8) <select id="sameSolutions"><option value="true">accept</option><option value="note">accept + note</option><option value="false">not accepted</option></select></label>
       <label title="Equivalent only inside this domain: partial credit (rubric category domain). Several: y: -pi/2 .. pi/2; x: 0 ..">Domain (partial) <input type="text" id="domain" size="14" placeholder="y: -pi/2 .. pi/2"></label>
       <label>Derivation <select id="derivation"><option>lastOnly</option><option>allSteps</option></select></label>
-      <label>Diagnose a wrong value <input type="checkbox" id="diagnosis" checked></label>
-      <label title="Sets, lists, tuples, and/or: 'The element 3 is missing' - off: 'An element is missing' (does not show part of the answer)">Name missing elements <input type="checkbox" id="nameMissing" checked></label>
+      <label class="check"><input type="checkbox" id="diagnosis" checked> Diagnose a wrong value</label>
+      <label class="check" title="Sets, lists, tuples, and/or: 'The element 3 is missing' - off: 'An element is missing' (does not show part of the answer)"><input type="checkbox" id="nameMissing" checked> Name missing elements</label>
     </div>
     <h3>Equivalence laws</h3>
     <div class="grid" id="laws"></div>
@@ -210,8 +248,8 @@ main[hidden] { display: none; }
     <div class="grid" style="margin-top:6px">
       <label>Start <input type="number" id="rbStart" min="0" max="100" style="width:64px"></label>
       <label>Minimum grade <input type="number" id="rbMinimum" min="0" max="100" style="width:64px"></label>
-      <label title="An incomplete answer (an empty place) gives 0">Fatal: incomplete <input type="checkbox" id="rbFatal_incomplete"></label>
-      <label title="An answer of another kind (an expression for an equation) gives 0">Fatal: answer type <input type="checkbox" id="rbFatal_answerType"></label>
+      <label class="check" title="An incomplete answer (an empty place) gives 0"><input type="checkbox" id="rbFatal_incomplete"> Fatal: incomplete</label>
+      <label class="check" title="An answer of another kind (an expression for an equation) gives 0"><input type="checkbox" id="rbFatal_answerType"> Fatal: answer type</label>
     </div>
     <table id="rubricTable"></table>
     <details style="margin-top:8px"><summary class="hint">Rubric JSON (edit here or in the table)</summary>
@@ -529,7 +567,7 @@ function preset(name) {
 $("kbForm").innerHTML = KB_GROUPS.map(function (g) {
     return "<fieldset class='kb-group'><legend>" + g.title + "</legend><div class='grid'>" + g.fields.map(function (f) {
         let input;
-        if (f.type === "check") input = "<input type='checkbox' data-kb='" + f.path + "'>";
+        if (f.type === "check") return "<label class='check'><input type='checkbox' data-kb='" + f.path + "'> " + f.label + "</label>";
         else if (f.type === "select") input = "<select data-kb='" + f.path + "'>" + f.options.map(function (o) { return "<option>" + o + "</option>"; }).join("") + "</select>";
         else input = "<input type='text' data-kb='" + f.path + "' placeholder='" + (f.placeholder || "") + "'" + (f.wide ? " style='width:100%'" : " size='6'") + ">";
         return f.wide ? "<label style='grid-column:1/-1;flex-wrap:wrap'>" + f.label + " " + input + "</label>"
@@ -610,7 +648,7 @@ const keyboards = {};                  // host id -> keyboard
 function makeKeyboard(hostId) {
     return new MoodleMathKeyboard(Object.assign(keyboardConfig(KB), {
         divId: hostId, physicalKeyboard: false,
-        onChange: function () { if (hostId !== "kbPreviewHost") schedule(); }
+        onChange: function () { if (hostId !== "kbPreviewHost") { schedule(); changedByUser(); } }
     }));
 }
 /* a new keyboard in its host with the current settings - what was typed in it stays */
@@ -677,19 +715,244 @@ $("copyKb").addEventListener("click", function () { copyFrom("kbCode", "copyKbMs
 
 /* the tabs (the one shown is remembered) */
 function showTab(name) {
-    const keyboardTab = name === "keyboard";
-    $("tabKeyboard").hidden = !keyboardTab;
-    $("tabChecker").hidden = keyboardTab;
-    $("tabBtnKeyboard").setAttribute("aria-selected", String(keyboardTab));
-    $("tabBtnChecker").setAttribute("aria-selected", String(!keyboardTab));
-    if (keyboardTab) { if (!keyboards.kbPreviewHost) rebuild("kbPreviewHost"); setActive("kbPreviewHost"); }
-    else { refreshChecker(); setActive("stuHost"); }
+    if (["keyboard", "checker", "file"].indexOf(name) < 0) name = "checker";
+    $("tabKeyboard").hidden = name !== "keyboard";
+    $("tabChecker").hidden = name !== "checker";
+    $("tabFile").hidden = name !== "file";
+    $("tabBtnKeyboard").setAttribute("aria-selected", String(name === "keyboard"));
+    $("tabBtnChecker").setAttribute("aria-selected", String(name === "checker"));
+    $("tabBtnFile").setAttribute("aria-selected", String(name === "file"));
+    if (name === "keyboard") { if (!keyboards.kbPreviewHost) rebuild("kbPreviewHost"); setActive("kbPreviewHost"); }
+    else if (name === "checker") { refreshChecker(); setActive("stuHost"); }
+    else { refreshChecker(); active = null; showFileTab(); }
     try { localStorage.setItem("mathCheckPlayground.tab", name); } catch (e) { /* storage blocked */ }
 }
 $("tabBtnKeyboard").addEventListener("click", function () { showTab("keyboard"); });
 $("tabBtnChecker").addEventListener("click", function () { showTab("checker"); });
+$("tabBtnFile").addEventListener("click", function () { showTab("file"); });
 
-/* start: the saved settings (else everything on), the checker with a first example: 2(x+1) and 2x+2 */
+/* ============================================================
+   3. THE EXERCISE FILE - keyboard + reference answer + rules + rubric in one JSON file (open / save as in the
+   chemistry builder: the file picker where the browser has it, else a download / a file input)
+   ============================================================ */
+const FILE_FORMAT = "mathCheck-exercise";
+let fileHandle = null, fileName = null, dirty = false, loading = false;
+
+function stripSrc(ast) { return JSON.parse(JSON.stringify(ast, function (k, v) { return k === "src" ? undefined : v; })); }
+
+/* everything the exercise needs, and what the playground needs to open it again */
+function exercisePackage() {
+    const rubric = JSON.parse($("rubric").value);
+    return {
+        format: FILE_FORMAT,
+        formatVersion: 1,
+        saved: new Date().toISOString(),
+        versions: { keyboard: MoodleMathKeyboard.version || null, mathCheck: MathCheck.version },
+        language: $("language").value,
+        keyboard: keyboardConfig(KB),
+        reference: stripSrc(keyboards.refHost.getAST()),
+        rules: withoutDefaults(readRules(), MathCheck.defaults.rules),
+        rubric: rubric,
+        playground: {
+            keyboardSettings: KB,
+            referenceEditor: keyboards.refHost.getEditorAST(),
+            studentEditor: keyboards.stuHost.getEditorAST()
+        }
+    };
+}
+
+/* a value of the defaults merged with the file's (the file keeps only what differs) */
+function deepMerge(base, over) {
+    if (!over || typeof over !== "object" || Array.isArray(over)) return over === undefined ? base : over;
+    const out = Object.assign({}, base);
+    Object.keys(over).forEach(function (k) {
+        out[k] = base && typeof base[k] === "object" && !Array.isArray(base[k]) && base[k] !== null ? deepMerge(base[k], over[k]) : over[k];
+    });
+    return out;
+}
+
+/* the rules -> the controls of the rules panel (the inverse of readRules) */
+function writeRules(rules) {
+    const r = deepMerge(MathCheck.defaults.rules, rules || {});
+    $("answerKind").value = r.answerKind || "auto";
+    $("mode").value = r.value.mode;
+    $("samples").value = r.value.samples;
+    const tol = r.value.tolerance || {};
+    $("tolerance").value = tol.decimals === 2 ? "d2" : tol.decimals === 3 ? "d3" : "rel";
+    $("rmin").value = r.value.domain ? r.value.domain.min : -4;
+    $("rmax").value = r.value.domain ? r.value.domain.max : 4;
+    $("scaleEquation").checked = r.statements.scaleEquation !== false;
+    $("sameSolutions").value = r.statements.sameSolutions === "note" ? "note" : String(r.statements.sameSolutions !== false);
+    $("domain").value = r.statements.domain ? Object.keys(r.statements.domain).map(function (v) {
+        const d = r.statements.domain[v] || {};
+        return v + ": " + (d.min !== undefined ? d.min : "") + " .. " + (d.max !== undefined ? d.max : "");
+    }).join("; ") : "";
+    $("derivation").value = r.statements.derivation || "lastOnly";
+    $("diagnosis").checked = r.diagnosis !== false;
+    $("nameMissing").checked = r.feedback.nameMissing !== false;
+    document.querySelectorAll("[data-law]").forEach(function (s) {
+        const v = r.equivalence[s.dataset.law];
+        s.value = v === "note" ? "note" : String(v !== false);
+    });
+    document.querySelectorAll("[data-form]").forEach(function (s) {
+        const v = r.form[s.dataset.form];
+        s.value = v === "note" || v === "error" ? v : (v && v.level) || "off";
+    });
+    const iso = r.form.isolatedVariable;
+    $("isolated").value = typeof iso === "string" ? iso : iso && iso.variable ? iso.variable : "";
+}
+
+/* typed content back into a checker keyboard (the editor AST saved by the playground) */
+function loadEditor(hostId, editorAST) {
+    const k = keyboards[hostId];
+    if (!editorAST || !editorAST.elements || !editorAST.elements.length) { k.clearAll(); return; }
+    let maxId = 0;
+    JSON.stringify(editorAST, function (key, v) { if (key === "id" && typeof v === "number" && v > maxId) maxId = v; return v; });
+    const last = editorAST.elements[editorAST.elements.length - 1];
+    k.editorAST = JSON.parse(JSON.stringify(editorAST));
+    k.cursor = { seqId: last.id, offset: (last.items || []).length, textNodeId: null, charOffset: null };
+    k.nextId = maxId + 1;
+    k.changed();
+}
+
+function loadPackage(pkg, name, handle) {
+    if (!pkg || pkg.format !== FILE_FORMAT) throw new Error("This is not a mathCheck exercise file.");
+    loading = true;
+    try {
+        /* 1. the keyboard: the playground's own settings, else made from the keyboard configuration */
+        let settings = pkg.playground && pkg.playground.keyboardSettings;
+        if (!settings) {
+            settings = deepMerge(preset("full"), pkg.keyboard || {});
+            settings.variables = (pkg.keyboard && pkg.keyboard.variables || []).map(function (v) { return v.id; }).join(", ");
+            settings.fixedCalculusVariable = (pkg.keyboard && pkg.keyboard.fixedCalculusVariable) || "";
+        }
+        writeKbForm(settings);
+        KB = readKbForm();
+        saveKbSettings();
+        $("kbCode").value = keyboardCode(keyboardConfig(KB));
+        $("kbSummary").textContent = keyboardSummary(KB);
+        rebuild("kbPreviewHost");
+        checkerStale = true;
+        refreshChecker();
+        /* 2. the answers typed in the checker */
+        const p = pkg.playground || {};
+        loadEditor("refHost", p.referenceEditor);
+        loadEditor("stuHost", p.studentEditor);
+        /* 3. the rules, the rubric, the feedback language */
+        writeRules(pkg.rules);
+        /* the file's rubric is the whole table (its categories replace the defaults, as in compare) */
+        rubricToUi(Object.assign({}, MathCheck.defaults.rubric, pkg.rubric || {}));
+        syncRubricJson();
+        if (pkg.language) $("language").value = pkg.language;
+    } finally {
+        loading = false;
+    }
+    fileHandle = handle || null;
+    fileName = name || null;
+    setDirty(false);
+    check();
+    showFileTab();
+    if (!(pkg.playground && pkg.playground.referenceEditor)) {
+        window.alert("The file has no typed reference answer for the playground (only its AST): type it again in the checker tab.");
+    }
+}
+
+function setDirty(value) {
+    dirty = value;
+    const text = dirty ? "● unsaved changes" : "";
+    $("dirtyMark").textContent = text;
+    $("fileDirty").textContent = text;
+    $("fileName").textContent = fileName || "(new exercise)";
+}
+/* any change of the keyboard, the answers, the rules or the rubric (not while a file is being opened) */
+function changedByUser() { if (!loading) setDirty(true); }
+["tabKeyboard", "tabChecker"].forEach(function (id) {
+    $(id).addEventListener("input", changedByUser);
+    $(id).addEventListener("change", changedByUser);
+});
+$("language").addEventListener("change", changedByUser);
+window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+function confirmDiscard() { return !dirty || window.confirm("The exercise has unsaved changes. Discard them?"); }
+
+function showFileTab() {
+    let pkg;
+    try { pkg = exercisePackage(); } catch (e) { $("packageJson").value = "The rubric JSON is not valid: " + e.message; return; }
+    $("packageJson").value = JSON.stringify(pkg, null, 1);
+    const ruleKeys = Object.keys(pkg.rules);
+    const rows = [
+        ["Keyboard", keyboardSummary(KB)],
+        ["Reference answer", "\\(" + (keyboards.refHost.getLatex() || "\\text{(empty)}") + "\\)"],
+        ["Rules", ruleKeys.length ? "differ from the defaults: " + ruleKeys.join(", ") : "the defaults"],
+        ["Rubric", Object.keys(pkg.rubric.categories || {}).map(function (c) {
+            const r = pkg.rubric.categories[c];
+            return c + " " + (typeof r === "number" ? r : r.mode + (r.mode !== "none" ? " " + r.points : ""));
+        }).join(" · ")],
+        ["Feedback language", pkg.language],
+        ["Versions", "keyboard " + (pkg.versions.keyboard || "?") + " · mathCheck " + pkg.versions.mathCheck]
+    ];
+    $("fileSummary").innerHTML = rows.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td></tr>"; }).join("");
+    typeset($("fileSummary"));
+}
+
+async function openFile() {
+    if (!confirmDiscard()) return;
+    if (window.showOpenFilePicker) {
+        try {
+            const handles = await window.showOpenFilePicker({ types: [{ description: "Exercise", accept: { "application/json": [".json"] } }] });
+            const file = await handles[0].getFile();
+            openText(await file.text(), file.name, handles[0]);
+        } catch (e) { if (e.name !== "AbortError") window.alert(e.message); }
+        return;
+    }
+    $("fileInput").value = "";
+    $("fileInput").click();
+}
+function openText(text, name, handle) {
+    try { loadPackage(JSON.parse(text), name, handle); }
+    catch (e) { window.alert("Could not open the file: " + e.message); }
+}
+$("fileInput").addEventListener("change", function () {
+    const file = $("fileInput").files[0];
+    if (!file) return;
+    file.text().then(function (text) { openText(text, file.name, null); });
+});
+
+async function saveFile(saveAs) {
+    let text;
+    try { text = JSON.stringify(exercisePackage(), null, 1); } catch (e) { window.alert("The rubric JSON is not valid: " + e.message); return; }
+    const suggested = (fileName || "exercise").replace(/\.json$/i, "") + ".json";
+    if (window.showSaveFilePicker) {
+        try {
+            let handle = saveAs ? null : fileHandle;
+            if (!handle) handle = await window.showSaveFilePicker({ suggestedName: suggested, types: [{ description: "Exercise", accept: { "application/json": [".json"] } }] });
+            const writable = await handle.createWritable();
+            await writable.write(text);
+            await writable.close();
+            fileHandle = handle;
+            fileName = handle.name;
+            setDirty(false);
+        } catch (e) { if (e.name !== "AbortError") window.alert(e.message); }
+        return;
+    }
+    /* no file system access: download it */
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/json;charset=utf-8" }));
+    a.download = suggested;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    fileName = suggested;
+    setDirty(false);
+}
+$("openBtn").addEventListener("click", openFile);
+$("saveBtn").addEventListener("click", function () { saveFile(false); });
+$("saveAsBtn").addEventListener("click", function () { saveFile(true); });
+$("copyPackage").addEventListener("click", function () { copyFrom("packageJson", "copyPackageMsg"); });
+
+/* start (called at the end, after every declaration): the saved settings (else everything on), the checker with a
+   first example: 2(x+1) and 2x+2 */
+function startUp() {
 KB = loadKbSettings();
 writeKbForm(KB);
 $("kbCode").value = keyboardCode(keyboardConfig(KB));
@@ -707,8 +970,12 @@ window.playground = {
     get preview() { return keyboards.kbPreviewHost; },
     showTab: showTab,
     preset: function (name) { writeKbForm(preset(name)); keyboardChanged(); },
-    check: function () { check(); }
+    check: function () { check(); },
+    exercisePackage: function () { return exercisePackage(); },
+    loadPackage: function (pkg) { loadPackage(pkg, "test.json", null); }
 };
+setDirty(false);
+}
 
 function schedule() { clearTimeout(timer); timer = setTimeout(check, 150); }
 document.querySelectorAll("select, input, textarea").forEach(function (el) {
@@ -812,6 +1079,7 @@ function solutionRows(d, vars, f) {
             part("Inside the domain - solutions of the reference", d.domainSolutions.reference) +
             part("Inside the domain - solutions of the student's equation", d.domainSolutions.student) : "");
 }
+startUp();
 schedule();
 }
 </script>
