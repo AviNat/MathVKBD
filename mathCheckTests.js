@@ -15,7 +15,7 @@
 "use strict";
 
 /* ---------------- the notation -> semantic AST ---------------- */
-const RELATIONS = ["less", "greater", "lessEqual", "greaterEqual", "notEqual", "approximate", "equal"];
+const RELATIONS = ["less", "greater", "lessEqual", "greaterEqual", "notEqual", "approximate", "equal", "memberOf", "notMemberOf"];
 const CONSTANTS = ["pi", "e", "i"];
 
 function parse(text) {
@@ -152,6 +152,30 @@ const CASES = [
     { group: "Functions", name: "asinh(x) = ln(x + √(x²+1))", ref: "asinh(x)", student: "ln((+ x sqrt((+ (^ x 2) 1))))", expect: { grade: 100 } },
     { group: "Functions", name: "atanh for tanh", ref: "tanh(x)", student: "atanh(x)", rules: { value: { variables: { x: { min: -0.9, max: 0.9 } } } }, expect: { grade: 0 } },
     { group: "Functions", name: "y = asin(x) as sin(y) = x? (no: other branches)", ref: "y ‖ asin(x)", student: "sin(y) ‖ x", expect: { grade: 0 } },
+    { group: "Form difference", name: "exact: (x+2)(x+3) for x²+5x+6 - factored, expanded expected", ref: "(+ (^ x 2) (* 5 x) 6)", student: "(* (+ x 2) (+ x 3))", rules: { value: { mode: "exact" } }, expect: { grade: 90, codes: ["not-equivalent-form"], feedbackIncludes: "the answer is factored and the expanded form is expected" } },
+    { group: "Form difference", name: "exact: x²+5x+6 for (x+2)(x+3) - expanded, factored expected", ref: "(* (+ x 2) (+ x 3))", student: "(+ (^ x 2) (* 5 x) 6)", rules: { value: { mode: "exact" } }, expect: { grade: 90, feedbackIncludes: "the answer is expanded and the factored form is expected" } },
+    { group: "Form difference", name: "structural, distributive off: the same message", ref: "(* (+ x 2) (+ x 3))", student: "(+ (^ x 2) (* 5 x) 6)", rules: { value: { mode: "structural" }, equivalence: { distributive: false } }, expect: { grade: 90, feedbackIncludes: "the factored form is expected" } },
+    { group: "Form difference", name: "exact: 1 + x for x + 1 - order", ref: "(+ x 1)", student: "(+ 1 x)", rules: { value: { mode: "exact" } }, expect: { grade: 90, feedbackIncludes: "another order" } },
+    { group: "Form difference", name: "exact: x + x for 2x - like terms", ref: "(* 2 x)", student: "(+ x x)", rules: { value: { mode: "exact" } }, expect: { grade: 90, feedbackIncludes: "like terms" } },
+    { group: "Form difference", name: "exact: −BA⃗ for AB⃗ - a reversed vector", ref: "vec(AB)", student: "(neg vec(BA))", rules: { value: { mode: "exact" } }, expect: { grade: 90, feedbackIncludes: "opposite direction" } },
+    { group: "Form difference", name: "structural: sin²x + cos²x for 1 - no single difference", ref: "1", student: "(+ (^ sin(x) 2) (^ cos(x) 2))", rules: { value: { mode: "structural" } }, expect: { grade: 90, feedbackIncludes: "this form of the answer is not accepted" } },
+    { group: "Form difference", name: "Hebrew", ref: "(+ (^ x 2) (* 5 x) 6)", student: "(* (+ x 2) (+ x 3))", rules: { value: { mode: "exact" } }, language: "he", expect: { feedbackIncludes: "מפורקת לגורמים" } },
+    { group: "Missing named", name: "{1, 2} for {1, 2, 3}: 3 is missing", ref: "set{1, 2, 3}", student: "set{1, 2}", expect: { grade: 75, codes: ["missing-element"], feedbackIncludes: "The element \\(3\\) is missing." } },
+    { group: "Missing named", name: "{1} for {1, 1/2, −3}: both named", ref: "set{1, (/ 1 2), (neg 3)}", student: "set{1}", expect: { grade: 50, codes: ["missing-element", "missing-element"], feedbackIncludes: "\\(\\frac{1}{2}\\) is missing" } },
+    { group: "Missing named", name: "the second one named too", ref: "set{1, (/ 1 2), (neg 3)}", student: "set{1}", expect: { feedbackIncludes: "\\(-3\\) is missing" } },
+    { group: "Missing named", name: "{0.5, 2} for {1/2, 2, 3}: 3, not 1/2", ref: "set{(/ 1 2), 2, 3}", student: "set{0.5, 2}", expect: { grade: 75, feedbackIncludes: "The element \\(3\\) is missing." } },
+    { group: "Missing named", name: "Hebrew", ref: "set{1, 2, 3}", student: "set{1, 2}", language: "he", expect: { feedbackIncludes: "חסר האיבר" } },
+    { group: "Missing named", name: "not named when nameMissing is false", ref: "set{1, 2, 3}", student: "set{1, 2}", rules: { feedback: { nameMissing: false } }, expect: { grade: 75, feedbackIncludes: "An element is missing." } },
+    { group: "Missing named", name: "tuple (1, 2) for (1, 2, 3)", ref: "tuple[1, 2, 3]", student: "tuple[1, 2]", expect: { codes: ["missing-element"], feedbackIncludes: "The element \\(3\\) is missing." } },
+    { group: "Missing named", name: "x = 2 alone for x = 2 ∨ x = 3", ref: "(or (equal x 2) (equal x 3))", student: "(or (equal x 2))", expect: { codes: ["missing-statement"], feedbackIncludes: "\\(x=3\\) is missing" } },
+    { group: "Membership", name: "x ∈ {2,3} for x ∈ {2,3,5}: 5 missing", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf x set{2, 3})", expect: { grade: 75, codes: ["missing-element"], feedbackIncludes: "The element \\(5\\) is missing." } },
+    { group: "Membership", name: "x ∈ {5,3,2}: another order", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf x set{5, 3, 2})", expect: { grade: 100 } },
+    { group: "Membership", name: "x ∈ {2,3,5,7}: 7 extra", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf x set{2, 3, 5, 7})", expect: { grade: 75, codes: ["extra-element"], feedbackIncludes: "\\(7\\) should not be there" } },
+    { group: "Membership", name: "x ∈ {2,4}: 3, 5 missing, 4 extra", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf x set{2, 4})", expect: { grade: 25, codes: ["extra-element", "missing-element", "missing-element"] } },
+    { group: "Membership", name: "x ∈ {4/2, 3, 5}: 4/2 is 2", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf x set{(/ 4 2), 3, 5})", expect: { grade: 100 } },
+    { group: "Membership", name: "x ∉ {2,3,5} for x ∈ {2,3,5}", ref: "(memberOf x set{2, 3, 5})", student: "(notMemberOf x set{2, 3, 5})", expect: { grade: 50, codes: ["wrong-relation"] } },
+    { group: "Membership", name: "y ∈ {2,3,5} for x ∈ {2,3,5}", ref: "(memberOf x set{2, 3, 5})", student: "(memberOf y set{2, 3, 5})", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Membership", name: "{2,3,5} for x ∈ {2,3,5}: answer type", ref: "(memberOf x set{2, 3, 5})", student: "set{2, 3, 5}", expect: { grade: 0, codes: ["answer-type"], feedbackIncludes: "a membership" } },
     { group: "Vectors", name: "CB + BA = CA for AB + BC = AC (all reversed)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(CB) vec(BA)) ‖ vec(CA)", expect: { grade: 100 } },
     { group: "Vectors", name: "BC + AB = AC (order of the terms)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(BC) vec(AB)) ‖ vec(AC)", expect: { grade: 100, equivalence: "commutative" } },
     { group: "Vectors", name: "AB − CB = AC (one reversed, with a minus)", ref: "(+ vec(AB) vec(BC)) ‖ vec(AC)", student: "(+ vec(AB) (neg vec(CB))) ‖ vec(AC)", expect: { grade: 100 } },
@@ -304,11 +328,29 @@ const CASES = [
     { group: "Rubric", name: "Arabic feedback", ref: "(+ x 1)", student: "(+ x 2)", language: "ar", expect: { grade: 0, feedbackIncludes: "قيمة الإجابة" } }
 ];
 
+/* the examples of the help (mathCheckHelp.js) are tests too: the help must say what the library does */
+(function addHelpExamples() {
+    let help = global.MathCheckHelp;
+    if (!help && typeof module === "object" && module.exports) {
+        try { help = require("./mathCheckHelp.js"); } catch (e) { help = null; }
+    }
+    if (!help) return;
+    help.sections.forEach(function (section) {
+        section.items.forEach(function (item) {
+            (item.examples || []).forEach(function (ex) {
+                CASES.push({ group: "Help: " + item.id, name: ex.caption, ref: ex.ref, student: ex.student,
+                    rules: ex.rules, rubric: ex.rubric, language: ex.language, expect: ex.expect });
+            });
+        });
+    });
+})();
+
 /* end-to-end: typed with the real keyboard (browser only) */
 const E2E = [
     { name: "2(x+1) typed, 2x+2 typed", refKeys: "2 ( x + 1", studentKeys: "2 x + 2", expect: { grade: 100, equivalence: "distributive" } },
     { name: "sin⁻¹ x typed, π/2 − cos⁻¹ x typed", refKeys: "asin x", studentKeys: "π / 2 → - acos x", expect: { grade: 100 } },
     { name: "CB⃗ + BA⃗ = CA⃗ typed for AB⃗ + BC⃗ = AC⃗", refKeys: "vec A B → + vec B C → = vec A C", studentKeys: "vec C B → + vec B A → = vec C A", expect: { grade: 100 } },
+    { name: "x ∈ {2, 3} typed for x ∈ {2, 3, 5}", refKeys: "x ∈ { 2 , 3 , 5", studentKeys: "x ∈ { 2 , 3", expect: { grade: 75, codes: ["missing-element"], feedbackIncludes: "The element \\(5\\) is missing." } },
     { name: "sin(π/2) typed for 1", refKeys: "1", studentKeys: "sin π / 2", expect: { grade: 100, equivalence: "numberForms" } },
     { name: "d/dx sin x² typed back for 2x cos x²", refKeys: "2 x cos x ^2", studentKeys: "d/dx x → sin x ^2", expect: { grade: 0, codes: ["not-evaluated"] } },
     { name: "x y = 8 typed, y = 8/x typed", refKeys: "x y = 8", studentKeys: "y = 8 / x", expect: { grade: 100, equivalence: "sameSolutions" } },

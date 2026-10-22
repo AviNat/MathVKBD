@@ -66,6 +66,7 @@ const DEFAULT_RULES = {
         showPenalties: true,
         showNotes: true,
         showReference: false,
+        nameMissing: true,               // "The element \(3\) is missing." - false: "An element is missing."
         messages: {}                     // { code: { he, en, ar } }
     }
 };
@@ -255,6 +256,7 @@ const RELATION_OPS = {
 function kindOf(a) {
     if (!a) return "empty";
     if (a.type === "chain") return a.elements.length === 2 ? "equation" : "derivation";
+    if (a.type === "relation" && (a.op === "memberOf" || a.op === "notMemberOf")) return "membership";
     if (a.type === "relation") return "inequality";
     if (a.type === "operation" && (a.op === "and" || a.op === "or" || a.op === "implies")) return "statement";
     if (a.type === "set") return "set";
@@ -658,7 +660,8 @@ function crel(op, l, r, o) {
     /* a > b is b < a (always: ANSWER-CHECKING 4.2) */
     if (op === "greater") { op = "less"; const t = l; l = r; r = t; }
     if (op === "greaterEqual") { op = "lessEqual"; const t = l; l = r; r = t; }
-    if (o.equationTransforms) return relToZero(op, l, r, o);
+    /* (left − right) for number relations only - not ∈ / ∉ (a set is not moved across) */
+    if (o.equationTransforms && ["equal", "notEqual", "approximate", "less", "lessEqual"].indexOf(op) >= 0) return relToZero(op, l, r, o);
     if (o.commutative && (op === "equal" || op === "notEqual" || op === "approximate") && ckey(l) > ckey(r)) {
         const t = l; l = r; r = t;
     }
@@ -768,11 +771,14 @@ function cadd(terms, o) {
     terms.forEach(function (t) { if (t.k === "add") flat = flat.concat(t.t); else flat.push(t); });
 
     if (o.numericEvaluation) {
-        let sum = rat(0), any = false;
+        let sum = rat(0), any = false, at = -1;
         const rest = [];
-        flat.forEach(function (t) { if (isNum(t)) { sum = ratAdd(sum, t.r); any = true; } else rest.push(t); });
+        flat.forEach(function (t) {
+            if (isNum(t)) { sum = ratAdd(sum, t.r); any = true; if (at < 0) at = rest.length; } else rest.push(t);
+        });
         flat = rest;
-        if (any && (sum.n !== 0 || flat.length === 0)) flat.push(num(sum));
+        /* the sum of the numbers where the first number was - without the commutative law the order stays */
+        if (any && (sum.n !== 0 || flat.length === 0)) flat.splice(o.commutative ? flat.length : at, 0, num(sum));
     }
 
     if (o.likeTerms) {
@@ -804,12 +810,15 @@ function cmul(factors, o) {
     factors.forEach(function (f) { if (f.k === "mul") flat = flat.concat(f.f); else flat.push(f); });
 
     if (o.numericEvaluation) {
-        let prod = rat(1), any = false;
+        let prod = rat(1), any = false, at = -1;
         const rest = [];
-        flat.forEach(function (f) { if (isNum(f)) { prod = ratMul(prod, f.r); any = true; } else rest.push(f); });
+        flat.forEach(function (f) {
+            if (isNum(f)) { prod = ratMul(prod, f.r); any = true; if (at < 0) at = rest.length; } else rest.push(f);
+        });
         if (any && prod.n === 0) return num(rat(0));
         flat = rest;
-        if (any && !(prod.n === 1 && prod.d === 1)) flat.unshift(num(prod));
+        /* the product of the numbers first - or, without the commutative law, where the first number was */
+        if (any && !(prod.n === 1 && prod.d === 1)) flat.splice(o.commutative ? 0 : at, 0, num(prod));
     }
 
     /* the distributive law: a product of sums is expanded */
@@ -886,7 +895,8 @@ function lawNoteFor(step, rules) {
 /* ============================================================
    PRINTING (LaTeX, for the feedback)
    ============================================================ */
-const REL_LATEX = { less: "<", greater: ">", lessEqual: "\\le", greaterEqual: "\\ge", notEqual: "\\ne", approximate: "\\approx", equal: "=" };
+const REL_LATEX = { less: "<", greater: ">", lessEqual: "\\le", greaterEqual: "\\ge", notEqual: "\\ne", approximate: "\\approx", equal: "=",
+    memberOf: "\\in", notMemberOf: "\\notin" };
 
 function latex(node, parentPrec) {
     if (!node) return "?";
@@ -978,9 +988,20 @@ const TEXT = {
         "not-exact": "Give the exact value, not a decimal approximation.",
         "not-isolated": "Write the answer with \\({variable}\\) alone on one side.",
         "not-equivalent-form": "The value is right, but this form of the answer is not accepted here.",
+        "not-equivalent-form-named": "The value is right, but {difference}.",
+        "diff-factored": "the answer is factored and the expanded form is expected here",
+        "diff-expanded": "the answer is expanded and the factored form is expected here",
+        "diff-distributive": "it is expanded or factored differently from the expected form",
+        "diff-commutative": "the terms or factors are in another order than expected",
+        "diff-numberForms": "a number is written in another form (calculated, a decimal or a fraction, the sign, a power or a root)",
+        "diff-vectors": "a vector is written in the opposite direction",
+        "diff-likeTerms": "like terms are combined differently from the expected form",
+        "diff-equationForms": "the equation is rearranged (terms moved or multiplied) differently from the expected form",
         "wrong-relation": "The relation \\({actual}\\) is not the right one.",
         "wrong-direction": "The inequality points the wrong way.",
         "missing-element": "An element is missing.",
+        "missing-element-named": "The element \\({element}\\) is missing.",
+        "missing-statement-named": "The part \\({statement}\\) is missing from the answer.",
         "extra-element": "The element \\({element}\\) should not be there.",
         "duplicate-element": "The element \\({element}\\) appears more than once.",
         "missing-statement": "A part of the answer (a condition or an equation) is missing.",
@@ -1012,6 +1033,7 @@ const TEXT = {
         "kind-expression": "an expression", "kind-equation": "an equation", "kind-inequality": "an inequality",
         "kind-statement": "a statement", "kind-set": "a set", "kind-tuple": "a tuple (an ordered list)",
         "kind-list": "a list", "kind-derivation": "a chain of steps", "kind-empty": "empty",
+        "kind-membership": "a membership (x ∈ A)",
         "cat-value": "Value", "cat-sign": "Sign", "cat-factor": "Factor", "cat-scale": "Scale", "cat-term": "Terms",
         "cat-form": "Form", "cat-relation": "Relation", "cat-elements": "Elements", "cat-order": "Order",
         "cat-precision": "Precision", "cat-derivation": "Derivation", "cat-mistake": "Common mistake", "cat-domain": "Domain",
@@ -1042,9 +1064,20 @@ const TEXT = {
         "not-exact": "יש לתת ערך מדויק, לא קירוב עשרוני.",
         "not-isolated": "יש לכתוב את התשובה כך ש־\\({variable}\\) לבד באגף אחד.",
         "not-equivalent-form": "הערך נכון, אך הצורה הזו של התשובה אינה מתקבלת כאן.",
+        "not-equivalent-form-named": "הערך נכון, אבל {difference}.",
+        "diff-factored": "התשובה מפורקת לגורמים, וכאן נדרשת הצורה הפתוחה (אחרי פתיחת סוגריים)",
+        "diff-expanded": "התשובה פתוחה, וכאן נדרשת הצורה המפורקת לגורמים",
+        "diff-distributive": "פתיחת הסוגריים או הפירוק לגורמים שונים מהצורה הנדרשת",
+        "diff-commutative": "סדר האיברים או הגורמים שונה מהנדרש",
+        "diff-numberForms": "מספר כתוב בצורה אחרת (מחושב, כשבר עשרוני או פשוט, הסימן, חזקה או שורש)",
+        "diff-vectors": "וקטור כתוב בכיוון ההפוך",
+        "diff-likeTerms": "כינוס האיברים הדומים שונה מהצורה הנדרשת",
+        "diff-equationForms": "המשוואה מסודרת אחרת (איברים הועברו או הוכפלו) מהצורה הנדרשת",
         "wrong-relation": "היחס \\({actual}\\) אינו היחס הנכון.",
         "wrong-direction": "כיוון אי־השוויון הפוך.",
         "missing-element": "חסר איבר.",
+        "missing-element-named": "חסר האיבר \\({element}\\).",
+        "missing-statement-named": "בתשובה חסר החלק \\({statement}\\).",
         "extra-element": "האיבר \\({element}\\) לא צריך להופיע.",
         "duplicate-element": "האיבר \\({element}\\) מופיע יותר מפעם אחת.",
         "missing-statement": "חסר חלק בתשובה (תנאי או משוואה).",
@@ -1076,6 +1109,7 @@ const TEXT = {
         "kind-expression": "ביטוי", "kind-equation": "משוואה", "kind-inequality": "אי־שוויון",
         "kind-statement": "טענה", "kind-set": "קבוצה", "kind-tuple": "סדרה סדורה",
         "kind-list": "רשימה", "kind-derivation": "שרשרת שלבים", "kind-empty": "ריקה",
+        "kind-membership": "שייכות לקבוצה (x ∈ A)",
         "cat-value": "ערך", "cat-sign": "סימן", "cat-factor": "גורם", "cat-scale": "קנה מידה", "cat-term": "איברים",
         "cat-form": "צורה", "cat-relation": "יחס", "cat-elements": "איברים", "cat-order": "סדר",
         "cat-precision": "דיוק", "cat-derivation": "פיתוח", "cat-mistake": "טעות נפוצה", "cat-domain": "תחום",
@@ -1106,9 +1140,20 @@ const TEXT = {
         "not-exact": "أعطِ القيمة الدقيقة، لا تقريبًا عشريًا.",
         "not-isolated": "اكتب الإجابة بحيث يكون \\({variable}\\) وحده في طرف.",
         "not-equivalent-form": "القيمة صحيحة، لكن هذا الشكل من الإجابة غير مقبول هنا.",
+        "not-equivalent-form-named": "القيمة صحيحة، لكن {difference}.",
+        "diff-factored": "الإجابة محللة إلى عوامل، والمطلوب هنا الشكل المفكوك",
+        "diff-expanded": "الإجابة مفكوكة، والمطلوب هنا الشكل المحلل إلى عوامل",
+        "diff-distributive": "فك الأقواس أو التحليل إلى عوامل مختلف عن الشكل المطلوب",
+        "diff-commutative": "ترتيب الحدود أو العوامل مختلف عن المطلوب",
+        "diff-numberForms": "عدد مكتوب بشكل آخر (محسوب، كسر عشري أو عادي، الإشارة، قوة أو جذر)",
+        "diff-vectors": "متجه مكتوب في الاتجاه المعاكس",
+        "diff-likeTerms": "جمع الحدود المتشابهة مختلف عن الشكل المطلوب",
+        "diff-equationForms": "المعادلة مرتبة بشكل آخر (حدود نُقلت أو ضُربت) مختلف عن الشكل المطلوب",
         "wrong-relation": "العلاقة \\({actual}\\) ليست العلاقة الصحيحة.",
         "wrong-direction": "اتجاه المتباينة معكوس.",
         "missing-element": "ينقص عنصر.",
+        "missing-element-named": "ينقص العنصر \\({element}\\).",
+        "missing-statement-named": "ينقص الجزء \\({statement}\\) من الإجابة.",
         "extra-element": "يجب ألا يظهر العنصر \\({element}\\).",
         "duplicate-element": "يظهر العنصر \\({element}\\) أكثر من مرة.",
         "missing-statement": "ينقص جزء من الإجابة (شرط أو معادلة).",
@@ -1140,6 +1185,7 @@ const TEXT = {
         "kind-expression": "تعبيرًا", "kind-equation": "معادلة", "kind-inequality": "متباينة",
         "kind-statement": "عبارة", "kind-set": "مجموعة", "kind-tuple": "زوجًا مرتبًا (قائمة مرتبة)",
         "kind-list": "قائمة", "kind-derivation": "سلسلة خطوات", "kind-empty": "فارغة",
+        "kind-membership": "انتماء لمجموعة (x ∈ A)",
         "cat-value": "القيمة", "cat-sign": "الإشارة", "cat-factor": "العامل", "cat-scale": "المقياس", "cat-term": "الحدود",
         "cat-form": "الشكل", "cat-relation": "العلاقة", "cat-elements": "العناصر", "cat-order": "الترتيب",
         "cat-precision": "الدقة", "cat-derivation": "الاشتقاق", "cat-mistake": "خطأ شائع", "cat-domain": "المجال",
@@ -1153,7 +1199,12 @@ const LRI = "⁦", PDI = "⁩";
 
 function feedbackText(code, language, params, custom) {
     const lang = TEXT[language] ? language : "en";
-    let text = (custom && custom[code] && (custom[code][lang] || custom[code].en)) || TEXT[lang][code] || TEXT.en[code] || code;
+    /* a missing element / statement with its name, when the rules give it (feedback.nameMissing) */
+    const named = (code === "missing-element" && params && params.element !== undefined) ||
+        (code === "missing-statement" && params && params.statement !== undefined) ||
+        (code === "not-equivalent-form" && params && params.difference !== undefined);
+    const key = named && !(custom && custom[code]) ? code + "-named" : code;
+    let text = (custom && custom[code] && (custom[code][lang] || custom[code].en)) || TEXT[lang][key] || TEXT.en[key] || code;
     const rtl = lang !== "en";
     Object.keys(params || {}).forEach(function (k) {
         let v = params[k];
@@ -1161,6 +1212,7 @@ function feedbackText(code, language, params, custom) {
             if (typeof v === "string" && TEXT[lang]["kind-" + v]) v = TEXT[lang]["kind-" + v];
         }
         if (k === "what" && typeof v === "string" && TEXT[lang]["op-" + v]) v = TEXT[lang]["op-" + v];
+        if (k === "difference" && typeof v === "string") v = TEXT[lang][v] || TEXT.en[v] || v;
         text = text.split("{" + k + "}").join(String(v));
     });
     /* math and numbers left to right inside a right-to-left line (the chemistry keyboard's lesson) */
@@ -1570,6 +1622,40 @@ function matchUnordered(studentItems, referenceItems, eq) {
     return { pairs: pairs, missing: missing, extra: extra };
 }
 
+/*
+ * The value is right but the form is not accepted (structural / exact mode): which difference separates the two?
+ * The ladder with every law allowed: the step where they meet names it. Expanded vs factored is told apart.
+ * { difference: text key } or {} (the general message) when no step explains it (sin²x + cos²x for 1).
+ */
+function formDifference(s, r, rules) {
+    const allLaws = {};
+    LADDER.forEach(function (l) { l.laws.forEach(function (law) { allLaws[law] = true; }); });
+    const all = merge(rules, { equivalence: allLaws, statements: { scaleEquation: true } });
+    const step = equivalenceStep(s, r, all);
+    if (step <= 0) return {};
+    const name = LADDER[step].name;
+    if (name === "distributive") {
+        const product = function (n) {
+            if (n && n.type === "operation" && n.op === "neg") n = n.operands[0];
+            const isSum = function (x) { return x && x.type === "operation" && x.op === "+"; };
+            if (!n || n.type !== "operation") return false;
+            if (n.op === "*") return n.operands.some(function (f) { return isSum(f) || (f.type === "operation" && f.op === "^" && isSum(f.operands[0])); });
+            return n.op === "^" && isSum(n.operands[0]);
+        };
+        const sp = product(s), rp = product(r);
+        if (sp && !rp) return { difference: "diff-factored" };
+        if (!sp && rp) return { difference: "diff-expanded" };
+        return { difference: "diff-distributive" };
+    }
+    if (name === "numberForms") {
+        /* a reversed vector: the same step is not reached without vectorReversal */
+        const noVectors = merge(all, { equivalence: { vectorReversal: false } });
+        const without = equivalenceStep(s, r, noVectors);
+        if (without < 0 || without > step) return { difference: "diff-vectors" };
+    }
+    return TEXT.en["diff-" + name] ? { difference: "diff-" + name } : {};
+}
+
 /* the first derivative / integral / limit / Σ / ∏ in the student's answer of a type the reference does not have */
 const OPERATION_TYPES = { derivative: true, integral: true, evaluation: true, limit: true, sum: true, product: true };
 function firstOperation(s, r) {
@@ -1592,6 +1678,35 @@ function compareOne(student, reference, rules, options, debug) {
     const ctx = makeContext(rules, options.seed !== undefined ? options.seed : hashString(JSON.stringify(stripSrc(reference))));
     const s = answerOf(student), r = answerOf(reference);
     const state = { valueRight: false, matchedMistake: null, equivalence: null };
+    /* a missing element / statement named in the feedback (it shows part of the answer: feedback.nameMissing) */
+    const missingParams = function (key, node) {
+        const p = {};
+        if (rules.feedback.nameMissing !== false && node) p[key] = latex(node);
+        return p;
+    };
+    /*
+     * The elements of two sets / lists, in any order: each missing and each extra element named (a set and the set
+     * in x ∈ {...}). true when the student's has every element and nothing else (a repeated element: setDuplicates).
+     */
+    const compareCollections = function (sItems, rItems) {
+        const eq = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
+        const m = matchUnordered(sItems, rItems, eq);
+        m.missing.forEach(function (j) { add("error", "missing-element", missingParams("element", rItems[j]), []); });
+        m.extra.forEach(function (i) {
+            /* the same value as a matched element: a duplicate */
+            const dup = m.pairs.some(function (p) { return eq(sItems[i], sItems[p[0]]); });
+            if (dup) {
+                const lvl = rules.collections.setDuplicates;
+                if (lvl === "error") add("error", "duplicate-element", { element: latex(sItems[i]) }, [sItems[i]]);
+                else if (lvl === "note") add("note", "duplicate-note", { element: latex(sItems[i]) }, [sItems[i]]);
+            } else {
+                add("error", "extra-element", { element: latex(sItems[i]) }, [sItems[i]]);
+            }
+        });
+        return m.missing.length === 0 && m.extra.every(function (i) {
+            return m.pairs.some(function (p) { return eq(sItems[i], sItems[p[0]]); });
+        });
+    };
 
     if (!s || hasMissing(s)) {
         add("error", "incomplete", {}, s ? [s] : []);
@@ -1637,7 +1752,7 @@ function compareOne(student, reference, rules, options, debug) {
         } else if (eq.structural && expressionsEqual(sAns, r, makeContext(merge(rules, { value: { mode: "numeric" } }), 1)).equal) {
             /* the value is right, the form is not one the rules accept */
             state.valueRight = true;
-            add("error", "not-equivalent-form", {}, [sAns]);
+            add("error", "not-equivalent-form", formDifference(sAns, r, rules), [sAns]);
         } else {
             diagnoseWrongValue(sAns, r, eq, ctx, add, state);
         }
@@ -1662,30 +1777,27 @@ function compareOne(student, reference, rules, options, debug) {
         } else if (out.direction) {
             add("error", "wrong-direction", {}, [s]);
         } else if (out.match) {
-            out.match.missing.forEach(function () { add("error", "missing-statement", {}, []); });
+            out.match.missing.forEach(function (j) { add("error", "missing-statement", missingParams("statement", r.operands[j]), []); });
             out.match.extra.forEach(function (i) { add("error", "extra-statement", { statement: latex(s.operands[i]) }, [s.operands[i]]); });
         } else {
             add("error", "wrong-value", {}, [s]);
         }
     } else if (refKind === "set" || refKind === "list") {
         const sItems = s.type === "set" ? s.elements : s.items, rItems = r.type === "set" ? r.elements : r.items;
-        const eq = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
-        const m = matchUnordered(sItems, rItems, eq);
-        m.missing.forEach(function () { add("error", "missing-element", {}, []); });
-        m.extra.forEach(function (i) {
-            /* the same value as a matched element: a duplicate */
-            const dup = m.pairs.some(function (p) { return eq(sItems[i], sItems[p[0]]); });
-            if (dup) {
-                const lvl = rules.collections.setDuplicates;
-                if (lvl === "error") add("error", "duplicate-element", { element: latex(sItems[i]) }, [sItems[i]]);
-                else if (lvl === "note") add("note", "duplicate-note", { element: latex(sItems[i]) }, [sItems[i]]);
-            } else {
-                add("error", "extra-element", { element: latex(sItems[i]) }, [sItems[i]]);
-            }
-        });
-        state.valueRight = m.missing.length === 0 && m.extra.every(function (i) {
-            return m.pairs.some(function (p) { return eq(sItems[i], sItems[p[0]]); });
-        });
+        state.valueRight = compareCollections(sItems, rItems);
+    } else if (refKind === "membership") {
+        /* x ∈ {2, 3, 5}: the same element (left), the same relation, the sets compared as sets */
+        if (!expressionsEqual(s.left, r.left, ctx).equal) {
+            add("error", "wrong-value", {}, [s.left]);
+        } else if (s.op !== r.op) {
+            add("error", "wrong-relation", { actual: REL_LATEX[s.op], expected: REL_LATEX[r.op] }, [s]);
+        } else if (s.right && r.right && s.right.type === "set" && r.right.type === "set") {
+            state.valueRight = compareCollections(s.right.elements, r.right.elements);
+        } else if (equivalenceStep(s.right, r.right, rules) >= 0) {
+            state.valueRight = true;                      // x ∈ ℝ, x ∈ A: the same set written the same way
+        } else {
+            add("error", "wrong-value", {}, [s.right]);
+        }
     } else if (refKind === "tuple") {
         const eq = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
         const sameOrder = s.elements.length === r.elements.length && r.elements.every(function (e, i) { return eq(s.elements[i], e); });
@@ -1694,7 +1806,7 @@ function compareOne(student, reference, rules, options, debug) {
             const m = matchUnordered(s.elements, r.elements, eq);
             if (m.missing.length === 0 && m.extra.length === 0) add("error", "wrong-order", {}, [s]);
             else {
-                m.missing.forEach(function () { add("error", "missing-element", {}, []); });
+                m.missing.forEach(function (j) { add("error", "missing-element", missingParams("element", r.elements[j]), []); });
                 m.extra.forEach(function (i) { add("error", "extra-element", { element: latex(s.elements[i]) }, [s.elements[i]]); });
             }
         }

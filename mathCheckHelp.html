@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mathCheck help</title>
+<script>
+window.MathJax = {
+    tex: { inlineMath: [["\\(", "\\)"]] },
+    svg: { fontCache: "global" },
+    startup: { typeset: false }
+};
+/*
+ * The help is data (mathCheckHelp.js); the examples are computed with the library (mathCheck.js) and written in the
+ * compact notation of the tests (mathCheckTests.js: parse). A local copy of each first, else the published one.
+ */
+const LIBRARIES = [
+    { name: "MathJax", local: "mathjax/tex-svg.js", remote: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" },
+    { name: "mathCheck", local: "mathCheck.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js" },
+    { name: "mathCheckHelp", local: "mathCheckHelp.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheckHelp.js" },
+    { name: "mathCheckTests", local: "mathCheckTests.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheckTests.js" }
+];
+function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function () { s.remove(); reject(new Error(src)); };
+        document.head.appendChild(s);
+    });
+}
+const LOADED = LIBRARIES.reduce(function (chain, lib) {
+    return chain.then(function () { return loadScript(lib.local).catch(function () { return loadScript(lib.remote); }); });
+}, Promise.resolve());
+</script>
+<style>
+:root {
+    --bg: #f4f6f9; --card: #fff; --text: #1d2733; --muted: #5b6876; --line: #d5dce4; --accent: #1f5f99;
+    --ok: #1a7f37; --bad: #b42318; --code: #eef3f8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.55 "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); }
+header { background: #13314f; color: #fff; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+header h1 { margin: 0; font-size: 20px; }
+header .sub { opacity: .85; font-size: 13px; flex: 1 1 300px; }
+header input, header select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a5372; }
+header input { width: 220px; }
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; max-width: 1280px; margin: 0 auto; padding: 16px; }
+nav { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow: auto; font-size: 13px; }
+nav a { display: block; color: var(--text); text-decoration: none; padding: 1px 6px; border-radius: 4px; }
+nav a:hover { background: var(--code); }
+nav .sec { font-weight: 600; color: var(--accent); margin-top: 10px; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } nav { position: static; max-height: none; } }
+h2 { font-size: 18px; margin: 22px 0 6px; }
+.intro { color: var(--muted); margin: 0 0 10px; }
+.item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; scroll-margin-top: 12px; }
+.item:target { border-color: var(--accent); box-shadow: 0 0 0 2px #cfe0f3; }
+.item h3 { margin: 0; font-size: 16px; font-family: Consolas, monospace; }
+.item .path { color: var(--muted); font-size: 12px; font-family: Consolas, monospace; }
+.item .values { font-size: 13px; margin: 4px 0; }
+.item .values b { color: var(--muted); font-weight: 600; }
+.item p { margin: 6px 0; }
+code { font-family: Consolas, monospace; background: var(--code); padding: 0 4px; border-radius: 4px; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 6px; }
+th, td { border-bottom: 1px solid #e3e8ee; padding: 5px 6px; text-align: start; vertical-align: top; }
+th { background: #eef3f8; font-weight: 600; }
+td.grade { font-weight: 700; white-space: nowrap; }
+td.grade.ok { color: var(--ok); } td.grade.bad { color: var(--bad); }
+td.fb { white-space: pre-wrap; font-size: 12.5px; }
+td.cfg { font-family: Consolas, monospace; font-size: 11.5px; color: var(--muted); word-break: break-word; }
+.mismatch { color: var(--bad); font-weight: 600; font-size: 12px; }
+.hidden { display: none; }
+#status { padding: 30px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>mathCheck help</h1>
+  <span class="sub">The comparison rules and the rubric: what each element does, with examples computed by the library.</span>
+  <input type="search" id="filter" placeholder="Filter, e.g. vector, domain" aria-label="Filter the help">
+  <select id="language" aria-label="Feedback language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
+</header>
+<div class="layout">
+  <nav id="toc"></nav>
+  <main id="content"><div id="status">Loading…</div></main>
+</div>
+
+<script>
+const $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+/* a rules / rubric object as a short line: { value: { mode: "structural" } } */
+function shortJs(v) {
+    if (Array.isArray(v)) return "[" + v.map(shortJs).join(", ") + "]";
+    if (v && typeof v === "object") return "{ " + Object.keys(v).map(function (k) { return k + ": " + shortJs(v[k]); }).join(", ") + " }";
+    return JSON.stringify(v);
+}
+
+/* the answer as math: the library's LaTeX of the parsed compact notation */
+function mathOf(compact) {
+    try { return "\\(" + MathCheck.latex(MathCheckTests.parse(compact)) + "\\)"; } catch (e) { return esc(compact); }
+}
+
+function exampleRow(ex, language) {
+    let result, problems = [];
+    try {
+        const rules = ex.rules ? prepareMistakes(ex.rules) : undefined;
+        result = MathCheck.compare(MathCheckTests.parse(ex.student), MathCheckTests.parse(ex.ref), rules, ex.rubric, { language: language });
+        if (ex.expect) problems = MathCheckTests.check(result, ex.expect);
+    } catch (e) {
+        return "<tr><td colspan='5' class='mismatch'>" + esc(e.message) + "</td></tr>";
+    }
+    const cfg = [ex.rules ? "rules: " + shortJs(ex.rules) : "", ex.rubric ? "rubric: " + shortJs(ex.rubric) : ""].filter(Boolean).join("<br>");
+    return "<tr><td>" + esc(ex.caption || "") + "</td>" +
+        "<td>" + mathOf(ex.ref) + "</td><td>" + mathOf(ex.student) + "</td>" +
+        "<td class='cfg'>" + (cfg || "defaults") + "</td>" +
+        "<td class='grade " + (result.grade === 100 ? "ok" : "bad") + "'>" + result.grade + "%</td>" +
+        "<td class='fb' dir='" + (language === "en" ? "ltr" : "rtl") + "'>" + esc(result.feedback) +
+        (problems.length ? "<div class='mismatch' dir='ltr'>Differs from the help: " + esc(problems.join("; ")) + "</div>" : "") + "</td></tr>";
+}
+
+/* a teacher mistake's answer is written in the compact notation too */
+function prepareMistakes(rules) {
+    if (!rules.mistakes) return rules;
+    const copy = JSON.parse(JSON.stringify(rules));
+    copy.mistakes.forEach(function (m) { if (typeof m.answer === "string") m.answer = MathCheckTests.parse(m.answer); });
+    return copy;
+}
+
+function render() {
+    const language = $("language").value;
+    const H = MathCheckHelp;
+    let toc = "", html = "";
+    H.sections.forEach(function (section) {
+        toc += "<div class='sec'>" + esc(H.text(section.title, "en")) + "</div>";
+        html += "<section data-section='" + section.id + "'><h2 id='section-" + section.id + "'>" + esc(H.text(section.title, language)) + "</h2>" +
+            (section.intro ? "<p class='intro'>" + esc(H.text(section.intro, language)) + "</p>" : "");
+        section.items.forEach(function (item) {
+            toc += "<a href='#" + item.id + "' data-toc='" + item.id + "'>" + esc(item.id) + "</a>";
+            html += "<div class='item' id='" + item.id + "' data-search='" + esc((item.id + " " + item.path + " " + H.text(item.text, "en")).toLowerCase()) + "'>" +
+                "<h3>" + esc(item.id) + "</h3><div class='path'>" + esc(item.path) + "</div>" +
+                (item.values ? "<div class='values'><b>Values:</b> <code>" + esc(item.values) + "</code></div>" : "") +
+                "<p>" + esc(H.text(item.text, language)) + "</p>" +
+                (item.examples && item.examples.length ?
+                    "<table><tr><th>Example</th><th>Reference</th><th>Student</th><th>Rules / rubric</th><th>Grade</th><th>Feedback</th></tr>" +
+                    item.examples.map(function (ex) { return exampleRow(ex, language); }).join("") + "</table>" : "") +
+                "</div>";
+        });
+        html += "</section>";
+    });
+    $("toc").innerHTML = toc;
+    $("content").innerHTML = "<p class='intro'>Library " + esc(MathCheck.version) + ". Every example below is computed now by the library; " +
+        "the same examples are in the test suite.</p>" + html;
+    applyFilter();
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([$("content")]).catch(function () {});
+    if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); }
+}
+
+function applyFilter() {
+    const q = $("filter").value.trim().toLowerCase();
+    document.querySelectorAll(".item").forEach(function (el) {
+        const show = !q || el.dataset.search.indexOf(q) >= 0;
+        el.classList.toggle("hidden", !show);
+        const link = document.querySelector("[data-toc='" + el.id + "']");
+        if (link) link.classList.toggle("hidden", !show);
+    });
+    document.querySelectorAll("section[data-section]").forEach(function (sec) {
+        sec.classList.toggle("hidden", !sec.querySelector(".item:not(.hidden)"));
+    });
+}
+
+LOADED.then(function () {
+    (window.MathJax && MathJax.startup ? MathJax.startup.promise : Promise.resolve()).then(render);
+    $("language").addEventListener("change", render);
+    $("filter").addEventListener("input", applyFilter);
+}).catch(function (e) {
+    $("status").textContent = "Could not load " + e.message;
+});
+</script>
+</body>
+</html>

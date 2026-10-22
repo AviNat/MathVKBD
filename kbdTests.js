@@ -227,6 +227,8 @@ let KEY_ACTIONS = {
     "|": function (k) { k.insertEvaluation(); },
     "=": function (k) { k.insertEquals(); },
     "<": function (k) { k.insertOperator("less", true); },
+    "∈": function (k) { k.insertOperator("memberOf", true); },
+    "∉": function (k) { k.insertOperator("notMemberOf", true); },
     ">": function (k) { k.insertOperator("greater", true); },
     "<=": function (k) { k.insertOperator("lessEqual", true); },
     ">=": function (k) { k.insertOperator("greaterEqual", true); },

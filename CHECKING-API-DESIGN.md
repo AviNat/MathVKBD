@@ -9,7 +9,11 @@ number give the same canonical form (scaling only with `statements.scaleEquation
 a constant multiple (xy = 8 and y = 8/x), numeric points of each solution set (one variable scanned, bisection) must
 solve the other equation. `statements.domain` ({ y: { min: "-pi/2", max: "pi/2" } }): equations equivalent only
 inside the domain (x = sin y for y = sin⁻¹x) get the error `domain-only`, rubric category `domain` (default −30, also
-when the teacher's rubric leaves it out). A student's d/dx, ∫, lim, Σ, ∏ the reference does not have: `not-evaluated`. Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
+when the teacher's rubric leaves it out). A student's d/dx, ∫, lim, Σ, ∏ the reference does not have: `not-evaluated`. Help (2026-10-22): `mathCheckHelp.js` -
+data only, not part of the library: one entry per rule / rubric element (id = its path, text he/en/ar - English
+written so far, examples in the test notation with the expected result); `mathCheckHelp.html` is the document built
+from it (examples computed live), linked from the playground; every example is also a test (mathCheckTests.js).
+How to show one entry next to its control (instead of a "?" on every item) is still open. Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
 strategies, the rejected options), which stays valid. This document adds what the user asked for on 2026-10-21:
 
 - one function that compares the student's semantic AST with the reference's, usable **in the browser and on a server**;

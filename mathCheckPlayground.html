@@ -85,7 +85,9 @@ tr.hit td { background: #e6f4ea; }
   <h1>mathCheck playground</h1>
   <span class="sub">Type a reference answer and a student answer; the check runs on every change. Click a keyboard to type into it with the computer keyboard.
     <br><span id="sources">Loading the libraries…</span></span>
-  <label>Feedback language
+  <a href="mathCheckHelp.html" target="_blank" rel="noopener" style="color:#fff;font-weight:600;margin-inline-start:auto"
+     title="What each rule and rubric element does, with examples">Help: rules &amp; rubric ↗</a>
+  <label style="margin-inline-start:0">Feedback language
     <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
   </label>
 </header>
@@ -134,7 +136,7 @@ tr.hit td { background: #e6f4ea; }
       <label>Answer kind
         <select id="answerKind">
           <option>auto</option><option>expression</option><option>equation</option><option>inequality</option>
-          <option>statement</option><option>set</option><option>tuple</option><option>derivation</option>
+          <option>statement</option><option>set</option><option>membership</option><option>tuple</option><option>derivation</option>
         </select></label>
       <label>Value mode <select id="mode"><option>numeric</option><option>structural</option><option>exact</option></select></label>
       <label>Sample points <input type="number" id="samples" min="3" max="40" value="8"></label>
@@ -146,6 +148,7 @@ tr.hit td { background: #e6f4ea; }
       <label title="Equivalent only inside this domain: partial credit (rubric category domain). Several: y: -pi/2 .. pi/2; x: 0 ..">Domain (partial) <input type="text" id="domain" size="14" placeholder="y: -pi/2 .. pi/2"></label>
       <label>Derivation <select id="derivation"><option>lastOnly</option><option>allSteps</option></select></label>
       <label>Diagnose a wrong value <input type="checkbox" id="diagnosis" checked></label>
+      <label title="Sets, lists, tuples, and/or: 'The element 3 is missing' - off: 'An element is missing' (does not show part of the answer)">Name missing elements <input type="checkbox" id="nameMissing" checked></label>
     </div>
     <h3>Equivalence laws</h3>
     <div class="grid" id="laws"></div>
@@ -353,7 +356,8 @@ function readRules() {
             scaleEquation: $("scaleEquation").checked, derivation: $("derivation").value,
             sameSolutions: $("sameSolutions").value === "note" ? "note" : $("sameSolutions").value === "true"
         },
-        diagnosis: $("diagnosis").checked
+        diagnosis: $("diagnosis").checked,
+        feedback: { nameMissing: $("nameMissing").checked }
     };
     document.querySelectorAll("[data-law]").forEach(function (s) {
         rules.equivalence[s.dataset.law] = s.value === "note" ? "note" : s.value === "true";
@@ -413,6 +417,8 @@ document.addEventListener("keydown", function (e) { if (active) active.handlePhy
 
 const refKbd = makeKeyboard("refHost"), stuKbd = makeKeyboard("stuHost");
 setActive(stuKbd, "stuHost");
+/* for the browser console and tests: playground.reference.getAST(), playground.check() */
+window.playground = { reference: refKbd, student: stuKbd, check: function () { check(); } };
 /* a first example: 2(x+1) and 2x+2 */
 "2 ( x + 1".split(" ").forEach(function (key) { KbdTests.pressKey(refKbd, key); });
 "2 x + 2".split(" ").forEach(function (key) { KbdTests.pressKey(stuKbd, key); });
