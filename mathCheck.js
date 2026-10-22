@@ -1,4 +1,4 @@
-﻿/*
+/*
  * mathCheck - compares a student's answer with a reference answer and grades it.
  * Design: CHECKING-API-DESIGN.md (API, rules, rubric) and ANSWER-CHECKING-DESIGN.md (the math tree, strategies).
  *
@@ -19,7 +19,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 /* ============================================================
    DEFAULTS

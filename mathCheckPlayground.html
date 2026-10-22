@@ -183,6 +183,7 @@ tr.hit td { background: #e6f4ea; }
     <textarea id="code" readonly spellcheck="false" style="height:260px"></textarea>
   </section>
 </main>
+<footer id="versions" style="padding:10px 16px 18px;color:var(--muted);font-size:12px;text-align:center"></footer>
 
 <script>
 /* runs when the libraries are loaded (the loader in <head>) */
@@ -191,7 +192,17 @@ const $ = function (id) { return document.getElementById(id); };
 $("sources").textContent = "Libraries: " + LIBRARIES.map(function (l) {
     return l.name + " " + (LOADED_FROM[l.name] === "local" ? "(local)" : "(GitHub/CDN)");
 }).join(" · ");
-const VARIABLES = ["x", "y", "z", "a", "b", "n", "t"].map(function (v) { return { id: v, label: v, latex: v }; })
+/* the versions at the bottom: the keyboard, mathCheck, MathJax - and where each came from */
+(function showVersions() {
+    const from = function (name) { return LOADED_FROM[name] === "local" ? "local" : "GitHub/CDN"; };
+    const parts = [
+        "Keyboard (fullKbdLib-v4) " + (MoodleMathKeyboard.version || "- no version number (an older copy)") + " · " + from("fullKbdLib-v4"),
+        "mathCheck " + MathCheck.version + " · " + from("mathCheck"),
+        "MathJax " + ((window.MathJax && MathJax.version) || "?") + " · " + from("MathJax")
+    ];
+    $("versions").textContent = parts.join("   |   ");
+})();
+const VARIABLES =["x", "y", "z", "a", "b", "n", "t"].map(function (v) { return { id: v, label: v, latex: v }; })
     .concat([{ id: "alpha", label: "α", latex: "\\alpha" }]);
 const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "vectorReversal", "likeTerms", "distributive", "equationTransforms"];
 const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "exactValue"];

@@ -1,5 +1,5 @@
 /*
- * MoodleMathKeyboard V4
+ * MoodleMathKeyboard V4 (version 4.1.0 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -6620,5 +6620,10 @@ MoodleMathKeyboard.prototype.destroy = function () {
         this.root.parentNode.removeChild(this.root);
     }
 };
+/*
+ * The library version (MoodleMathKeyboard.version). 4.1.0 (2026-10-22): the MathJax queue, no cursor in getLatex(),
+ * no button for an empty panel.
+ */
+MoodleMathKeyboard.version = "4.1.0";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
