@@ -78,12 +78,22 @@ tr.hit td { background: #e6f4ea; }
 .yes { color: var(--ok); font-weight: bold; } .no { color: var(--bad); }
 #rubricMsg { color: var(--bad); font-size: 12px; }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.tabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); background: #e9eef4; }
+.tabs button { font: inherit; font-weight: 600; padding: 7px 16px; border: 1px solid var(--line); border-bottom: none;
+               border-radius: 8px 8px 0 0; background: #dfe6ee; color: #3a4a5c; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: #f4f6f9; color: var(--accent); margin-bottom: -1px; }
+.tabs .tab-note { margin-inline-start: auto; align-self: center; font-size: 12px; color: var(--muted); }
+main[hidden] { display: none; }
+.kb-group { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 8px; margin-bottom: 8px; }
+.kb-group legend { font-weight: 600; color: var(--accent); font-size: 13px; padding: 0 4px; }
+.kb-group .grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+#kbCode { height: 300px; }
 </style>
 </head>
 <body>
 <header>
   <h1>mathCheck playground</h1>
-  <span class="sub">Type a reference answer and a student answer; the check runs on every change. Click a keyboard to type into it with the computer keyboard.
+  <span class="sub">1. Define the keyboard the student will get. 2. Type a reference answer and a student answer with it; the check runs on every change. Click a keyboard to type into it with the computer keyboard.
     <br><span id="sources">Loading the libraries…</span></span>
   <a href="mathCheckHelp.html" target="_blank" rel="noopener" style="color:#fff;font-weight:600;margin-inline-start:auto"
      title="What each rule and rubric element does, with examples">Help: rules &amp; rubric ↗</a>
@@ -91,7 +101,43 @@ tr.hit td { background: #e6f4ea; }
     <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
   </label>
 </header>
-<main>
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" id="tabBtnKeyboard" aria-selected="false" aria-controls="tabKeyboard">1. Keyboard</button>
+  <button type="button" role="tab" id="tabBtnChecker" aria-selected="true" aria-controls="tabChecker">2. Checker</button>
+  <span class="tab-note" id="kbSummary"></span>
+</nav>
+
+<!-- 1. the keyboard the student gets: its settings, a preview, the code -->
+<main id="tabKeyboard" role="tabpanel" hidden>
+  <section>
+    <h2>Keyboard settings</h2>
+    <div class="hint">What the student's keyboard offers. The checker tab uses the same keyboard for the reference and
+      the student answers. These settings are independent of the checker's rules.</div>
+    <div class="grid" style="margin:8px 0">
+      <label>Start from
+        <select id="kbPreset">
+          <option value="">- a preset -</option>
+          <option value="numbers">Numbers only</option>
+          <option value="algebra">Algebra (x, y)</option>
+          <option value="equation">An equation (x, y)</option>
+          <option value="full">Everything</option>
+        </select></label>
+    </div>
+    <div id="kbForm"></div>
+  </section>
+  <section>
+    <h2>Preview</h2>
+    <div class="hint">The keyboard as the student will see it - try it.</div>
+    <div id="kbPreviewHost" class="kbd"></div>
+    <h3>Code to create this keyboard
+      <button type="button" id="copyKb" style="margin-inline-start:10px">Copy</button>
+      <span id="copyKbMsg" class="hint"></span></h3>
+    <textarea id="kbCode" readonly spellcheck="false"></textarea>
+  </section>
+</main>
+
+<!-- 2. the checker: the reference and student answers typed with that keyboard -->
+<main id="tabChecker" role="tabpanel">
   <section>
     <h2>Reference answer</h2>
     <div id="refHost" class="kbd"></div>
@@ -202,8 +248,6 @@ $("sources").textContent = "Libraries: " + LIBRARIES.map(function (l) {
     ];
     $("versions").textContent = parts.join("   |   ");
 })();
-const VARIABLES =["x", "y", "z", "a", "b", "n", "t"].map(function (v) { return { id: v, label: v, latex: v }; })
-    .concat([{ id: "alpha", label: "α", latex: "\\alpha" }]);
 const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "vectorReversal", "likeTerms", "distributive", "equationTransforms"];
 const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "exactValue"];
 let timer = null, active = null, mjChain = null;
@@ -397,42 +441,274 @@ function typeset(el) {
     }).catch(function () {});
 }
 
-/* keyboards; physical keys go to the active one only (each keyboard alone would take every key on the page) */
-function makeKeyboard(hostId) {
-    const k = new MoodleMathKeyboard({
-        /* every option, as in FullKBD.html - mathCheck answers "unsupported" for what it cannot evaluate yet */
-        divId: hostId, physicalKeyboard: false, variables: VARIABLES, complexNumbers: true, enableEquals: true,
-        multiplicationSymbol: "cdot", showImplicitMultiply: true, placeholderTooltips: true, sets: true,
-        acceptLowercaseVariables: true, acceptUppercaseVariables: true,
-        functions: {
-            logarithmic: true, trigonometric: true, inverseTrigonometric: true,
-            hyperbolic: true, inverseHyperbolic: true, namedFunction: true
-        },
-        structures: {
-            integral: true, evaluation: true, summation: true, product: true, limit: true,
-            absoluteValue: true, vector: "both", derivative: true, partialDerivative: true
-        },
-        symbols: { general: true, relations: true, logic: true, geometry: true },
-        withUnits: true,
-        unitCategories: { length: true, area: true, volume: true, time: true, speed: true, acceleration: true, angle: true },
-        onChange: function () { schedule(); }
+/* ============================================================
+   1. THE KEYBOARD TAB - the student's keyboard (independent of the checker's rules)
+   ============================================================ */
+/* every option of the keyboard library, by its path in the configuration */
+const KB_GROUPS = [
+    { title: "General", fields: [
+        { path: "language", label: "Language (tooltips)", type: "select", options: ["en", "he", "ar"] },
+        { path: "multiplicationSymbol", label: "Multiplication sign", type: "select", options: ["cdot", "times"] },
+        { path: "enableEquals", label: "The \"=\" key", type: "check" },
+        { path: "complexNumbers", label: "Complex numbers (i)", type: "check" },
+        { path: "sets", label: "Sets { }", type: "check" },
+        { path: "implicitMultiply", label: "Implicit multiplication (2x)", type: "check" },
+        { path: "showImplicitMultiply", label: "Show the implicit · ", type: "check" },
+        { path: "placeholderTooltips", label: "Tooltips on empty places", type: "check" },
+        { path: "fixedCalculusVariable", label: "Fixed variable of d/dx", type: "text", placeholder: "x" }
+    ] },
+    { title: "Variables", fields: [
+        { path: "variables", label: "Variables (comma separated; Greek by name: alpha, theta…)", type: "text", wide: true, placeholder: "x, y" },
+        { path: "acceptLowercaseVariables", label: "Any lowercase letter typed", type: "check" },
+        { path: "acceptUppercaseVariables", label: "Any uppercase letter typed", type: "check" }
+    ] },
+    { title: "Functions", fields: [
+        { path: "functions.logarithmic", label: "ln, log, logₐ", type: "check" },
+        { path: "functions.trigonometric", label: "sin, cos, tan", type: "check" },
+        { path: "functions.inverseTrigonometric", label: "sin⁻¹, cos⁻¹, tan⁻¹", type: "check" },
+        { path: "functions.hyperbolic", label: "sinh, cosh, tanh", type: "check" },
+        { path: "functions.inverseHyperbolic", label: "sinh⁻¹, cosh⁻¹, tanh⁻¹", type: "check" },
+        { path: "functions.namedFunction", label: "f(x), f′", type: "check" }
+    ] },
+    { title: "Structures", fields: [
+        { path: "structures.absoluteValue", label: "|x|", type: "check" },
+        { path: "structures.integral", label: "∫ integral", type: "check" },
+        { path: "structures.evaluation", label: "F|ₐᵇ evaluation", type: "check" },
+        { path: "structures.summation", label: "Σ sum", type: "check" },
+        { path: "structures.product", label: "∏ product", type: "check" },
+        { path: "structures.limit", label: "lim", type: "check" },
+        { path: "structures.derivative", label: "d/dx", type: "check" },
+        { path: "structures.partialDerivative", label: "∂/∂x", type: "check" },
+        { path: "structures.vector", label: "Vectors", type: "select", options: ["none", "arrow", "underline", "both"] }
+    ] },
+    { title: "Symbols", fields: [
+        { path: "symbols.general", label: "General (∞, °, !, %…)", type: "check" },
+        { path: "symbols.relations", label: "Relations (<, ≤, ≠…)", type: "check" },
+        { path: "symbols.logic", label: "Logic and sets (∧, ∨, ∈…)", type: "check" },
+        { path: "symbols.geometry", label: "Geometry (∥, ⊥, ≅…)", type: "check" }
+    ] },
+    { title: "Units", fields: [
+        { path: "withUnits", label: "The units key", type: "check" },
+        { path: "unitCategories.length", label: "Length", type: "check" },
+        { path: "unitCategories.area", label: "Area", type: "check" },
+        { path: "unitCategories.volume", label: "Volume", type: "check" },
+        { path: "unitCategories.time", label: "Time", type: "check" },
+        { path: "unitCategories.speed", label: "Speed", type: "check" },
+        { path: "unitCategories.acceleration", label: "Acceleration", type: "check" },
+        { path: "unitCategories.mass", label: "Mass", type: "check" }
+    ] }
+];
+
+/* the presets (the variables as text, as in the form) */
+const ALL_ON = {
+    language: "en", multiplicationSymbol: "cdot", enableEquals: true, complexNumbers: true, sets: true,
+    implicitMultiply: true, showImplicitMultiply: true, placeholderTooltips: true, fixedCalculusVariable: "",
+    variables: "x, y, z, a, b, n, t, alpha", acceptLowercaseVariables: true, acceptUppercaseVariables: true,
+    functions: { logarithmic: true, trigonometric: true, inverseTrigonometric: true, hyperbolic: true, inverseHyperbolic: true, namedFunction: true },
+    structures: { absoluteValue: true, integral: true, evaluation: true, summation: true, product: true, limit: true,
+        derivative: true, partialDerivative: true, vector: "both" },
+    symbols: { general: true, relations: true, logic: true, geometry: true },
+    withUnits: true,
+    unitCategories: { length: true, area: true, volume: true, time: true, speed: true, acceleration: true, mass: true }
+};
+function preset(name) {
+    const p = JSON.parse(JSON.stringify(ALL_ON));
+    if (name === "full") return p;
+    const off = function (obj) { Object.keys(obj).forEach(function (k) { if (obj[k] === true) obj[k] = false; }); };
+    off(p.functions); off(p.structures); p.structures.vector = "none"; off(p.symbols); off(p.unitCategories);
+    p.withUnits = false; p.complexNumbers = false; p.sets = false;
+    p.acceptLowercaseVariables = false; p.acceptUppercaseVariables = false;
+    if (name === "numbers") { p.variables = ""; p.enableEquals = false; return p; }
+    p.variables = "x, y";
+    p.functions.logarithmic = true; p.functions.trigonometric = true; p.structures.absoluteValue = true;
+    p.enableEquals = name === "equation";
+    return p;
+}
+
+/* the form, built from KB_GROUPS */
+$("kbForm").innerHTML = KB_GROUPS.map(function (g) {
+    return "<fieldset class='kb-group'><legend>" + g.title + "</legend><div class='grid'>" + g.fields.map(function (f) {
+        let input;
+        if (f.type === "check") input = "<input type='checkbox' data-kb='" + f.path + "'>";
+        else if (f.type === "select") input = "<select data-kb='" + f.path + "'>" + f.options.map(function (o) { return "<option>" + o + "</option>"; }).join("") + "</select>";
+        else input = "<input type='text' data-kb='" + f.path + "' placeholder='" + (f.placeholder || "") + "'" + (f.wide ? " style='width:100%'" : " size='6'") + ">";
+        return f.wide ? "<label style='grid-column:1/-1;flex-wrap:wrap'>" + f.label + " " + input + "</label>"
+            : "<label>" + f.label + " " + input + "</label>";
+    }).join("") + "</div></fieldset>";
+}).join("");
+
+function getPath(obj, path) { return path.split(".").reduce(function (o, k) { return o ? o[k] : undefined; }, obj); }
+function setPath(obj, path, value) {
+    const keys = path.split("."), last = keys.pop();
+    const target = keys.reduce(function (o, k) { if (!o[k] || typeof o[k] !== "object") o[k] = {}; return o[k]; }, obj);
+    target[last] = value;
+}
+/* form <-> settings (the variables as text) */
+function readKbForm() {
+    const s = {};
+    document.querySelectorAll("[data-kb]").forEach(function (el) {
+        setPath(s, el.dataset.kb, el.type === "checkbox" ? el.checked : el.value);
     });
-    $(hostId).addEventListener("mousedown", function () { setActive(k, hostId); });
+    return s;
+}
+function writeKbForm(s) {
+    document.querySelectorAll("[data-kb]").forEach(function (el) {
+        const v = getPath(s, el.dataset.kb);
+        if (el.type === "checkbox") el.checked = !!v; else el.value = v === undefined || v === null ? "" : v;
+    });
+}
+
+/* "x, y, alpha" -> the keyboard's variables */
+const GREEK = { alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", theta: "θ", lambda: "λ", mu: "μ",
+    sigma: "σ", tau: "τ", phi: "φ", omega: "ω", rho: "ρ", nu: "ν" };
+function parseVariables(text) {
+    return String(text || "").split(/[,\s]+/).filter(Boolean).map(function (v) {
+        return GREEK[v] ? { id: v, label: GREEK[v], latex: "\\" + v } : { id: v, label: v, latex: v };
+    });
+}
+/* the settings -> the keyboard library's configuration */
+function keyboardConfig(s) {
+    const c = JSON.parse(JSON.stringify(s));
+    c.variables = parseVariables(s.variables);
+    c.fixedCalculusVariable = (s.fixedCalculusVariable || "").trim() || null;
+    return c;
+}
+
+let KB = null;                         // the current settings
+function loadKbSettings() {
+    try { const saved = JSON.parse(localStorage.getItem("mathCheckPlayground.keyboard") || "null"); if (saved) return saved; } catch (e) { /* storage blocked */ }
+    return preset("full");
+}
+function saveKbSettings() {
+    try { localStorage.setItem("mathCheckPlayground.keyboard", JSON.stringify(KB)); } catch (e) { /* storage blocked */ }
+}
+
+/* the code that creates this keyboard (short objects on one line) */
+function jsValue(v, indent) {
+    const flat = (function inline(x) {
+        if (Array.isArray(x)) return "[" + x.map(inline).join(", ") + "]";
+        if (x && typeof x === "object") { const ks = Object.keys(x); return ks.length ? "{ " + ks.map(function (k) { return k + ": " + inline(x[k]); }).join(", ") + " }" : "{}"; }
+        return JSON.stringify(x);
+    })(v);
+    if (flat.length <= 72 || !v || typeof v !== "object") return flat;
+    const inner = indent + "    ";
+    if (Array.isArray(v)) return "[\n" + v.map(function (x) { return inner + jsValue(x, inner); }).join(",\n") + "\n" + indent + "]";
+    return "{\n" + Object.keys(v).map(function (k) { return inner + k + ": " + jsValue(v[k], inner); }).join(",\n") + "\n" + indent + "}";
+}
+function keyboardCode(config) {
+    const options = Object.assign({ divId: "answerKeyboard" }, config);
+    return "<div id=\"answerKeyboard\"></div>\n\n" +
+        "const keyboard = new MoodleMathKeyboard(" + jsValue(options, "").replace(/\n\}$/, ",\n    onChange: function (value) {\n" +
+        "        // value.latex - the LaTeX; value.ast - the semantic AST (keyboard.getAST()), what mathCheck compares\n    }\n}") + ");\n";
+}
+
+/* ============================================================
+   KEYBOARDS - the preview and the checker's two, all from the settings; the computer keyboard goes to the one
+   clicked last (each keyboard alone would take every key on the page)
+   ============================================================ */
+const keyboards = {};                  // host id -> keyboard
+function makeKeyboard(hostId) {
+    return new MoodleMathKeyboard(Object.assign(keyboardConfig(KB), {
+        divId: hostId, physicalKeyboard: false,
+        onChange: function () { if (hostId !== "kbPreviewHost") schedule(); }
+    }));
+}
+/* a new keyboard in its host with the current settings - what was typed in it stays */
+function rebuild(hostId) {
+    const old = keyboards[hostId];
+    const saved = old ? { ast: old.editorAST, cursor: old.cursor, nextId: old.nextId } : null;
+    if (old) old.destroy();
+    $(hostId).innerHTML = "";
+    const k = makeKeyboard(hostId);
+    if (saved) {
+        k.editorAST = saved.ast;
+        k.cursor = saved.cursor;
+        k.nextId = saved.nextId;
+        k.changed();
+    }
+    keyboards[hostId] = k;
+    if (active && active.hostId === hostId) active = { hostId: hostId, keyboard: k };
     return k;
 }
-function setActive(k, hostId) {
-    active = k;
+let checkerStale = true;
+["kbPreviewHost", "refHost", "stuHost"].forEach(function (hostId) {
+    $(hostId).addEventListener("mousedown", function () { setActive(hostId); });
+});
+function setActive(hostId) {
+    active = { hostId: hostId, keyboard: keyboards[hostId] };
     document.querySelectorAll(".kbd").forEach(function (h) { h.classList.toggle("active", h.id === hostId); });
 }
-document.addEventListener("keydown", function (e) { if (active) active.handlePhysicalKey(e); });
+document.addEventListener("keydown", function (e) { if (active && active.keyboard) active.keyboard.handlePhysicalKey(e); });
 
-const refKbd = makeKeyboard("refHost"), stuKbd = makeKeyboard("stuHost");
-setActive(stuKbd, "stuHost");
+/* a change of the settings: the preview and the code now, the checker's keyboards when that tab is shown */
+let kbTimer = null;
+function keyboardChanged() {
+    KB = readKbForm();
+    saveKbSettings();
+    $("kbCode").value = keyboardCode(keyboardConfig(KB));
+    $("kbSummary").textContent = keyboardSummary(KB);
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(function () {
+        rebuild("kbPreviewHost");
+        checkerStale = true;
+        if (!$("tabChecker").hidden) refreshChecker();
+    }, 200);
+}
+function keyboardSummary(s) {
+    const vars = parseVariables(s.variables).map(function (v) { return v.label; });
+    return "Keyboard: " + (vars.length ? vars.join(", ") : "no variables") + (s.enableEquals ? " · with =" : " · no =");
+}
+function refreshChecker() {
+    if (!checkerStale) return;
+    rebuild("refHost");
+    rebuild("stuHost");
+    checkerStale = false;
+    schedule();
+}
+$("kbForm").addEventListener("input", keyboardChanged);
+$("kbForm").addEventListener("change", keyboardChanged);
+$("kbPreset").addEventListener("change", function () {
+    if (!$("kbPreset").value) return;
+    writeKbForm(preset($("kbPreset").value));
+    $("kbPreset").value = "";
+    keyboardChanged();
+});
+$("copyKb").addEventListener("click", function () { copyFrom("kbCode", "copyKbMsg"); });
+
+/* the tabs (the one shown is remembered) */
+function showTab(name) {
+    const keyboardTab = name === "keyboard";
+    $("tabKeyboard").hidden = !keyboardTab;
+    $("tabChecker").hidden = keyboardTab;
+    $("tabBtnKeyboard").setAttribute("aria-selected", String(keyboardTab));
+    $("tabBtnChecker").setAttribute("aria-selected", String(!keyboardTab));
+    if (keyboardTab) { if (!keyboards.kbPreviewHost) rebuild("kbPreviewHost"); setActive("kbPreviewHost"); }
+    else { refreshChecker(); setActive("stuHost"); }
+    try { localStorage.setItem("mathCheckPlayground.tab", name); } catch (e) { /* storage blocked */ }
+}
+$("tabBtnKeyboard").addEventListener("click", function () { showTab("keyboard"); });
+$("tabBtnChecker").addEventListener("click", function () { showTab("checker"); });
+
+/* start: the saved settings (else everything on), the checker with a first example: 2(x+1) and 2x+2 */
+KB = loadKbSettings();
+writeKbForm(KB);
+$("kbCode").value = keyboardCode(keyboardConfig(KB));
+$("kbSummary").textContent = keyboardSummary(KB);
+refreshChecker();
+"2 ( x + 1".split(" ").forEach(function (key) { KbdTests.pressKey(keyboards.refHost, key); });
+"2 x + 2".split(" ").forEach(function (key) { KbdTests.pressKey(keyboards.stuHost, key); });
+let startTab = "checker";
+try { startTab = localStorage.getItem("mathCheckPlayground.tab") || "checker"; } catch (e) { /* storage blocked */ }
+showTab(startTab);
 /* for the browser console and tests: playground.reference.getAST(), playground.check() */
-window.playground = { reference: refKbd, student: stuKbd, check: function () { check(); } };
-/* a first example: 2(x+1) and 2x+2 */
-"2 ( x + 1".split(" ").forEach(function (key) { KbdTests.pressKey(refKbd, key); });
-"2 x + 2".split(" ").forEach(function (key) { KbdTests.pressKey(stuKbd, key); });
+window.playground = {
+    get reference() { return keyboards.refHost; },
+    get student() { return keyboards.stuHost; },
+    get preview() { return keyboards.kbPreviewHost; },
+    showTab: showTab,
+    preset: function (name) { writeKbForm(preset(name)); keyboardChanged(); },
+    check: function () { check(); }
+};
 
 function schedule() { clearTimeout(timer); timer = setTimeout(check, 150); }
 document.querySelectorAll("select, input, textarea").forEach(function (el) {
@@ -448,7 +724,8 @@ function check() {
     try { rubric = JSON.parse($("rubric").value); $("rubricMsg").textContent = MathCheck.validateRubric(rubric).join(" · "); }
     catch (e) { $("rubricMsg").textContent = "Rubric JSON: " + e.message; return; }
 
-    const ref = refKbd.getAST(), stu = stuKbd.getAST();
+    if (!keyboards.refHost || !keyboards.stuHost) return;
+    const ref = keyboards.refHost.getAST(), stu = keyboards.stuHost.getAST();
     $("refJson").value = JSON.stringify(ref, function (k, v) { return k === "src" ? undefined : v; });
     $("code").value = codeText(rules, rubric, ref);
     const result = MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
