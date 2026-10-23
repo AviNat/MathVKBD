@@ -445,7 +445,8 @@ Object.keys(EXERCISES).forEach(function (id) {
         const kbd = ex.keyboard;
         const student = ex.unit !== undefined ? { answer: kbd.getAST(), unit: kbd.getUnit() || null } : kbd.getAST();
         const reference = ex.unit !== undefined ? { answer: ex.reference, unit: ex.unit } : ex.reference;
-        const r = MathCheck.compare(student, reference, ex.rules, ex.rubric || null, { language: ex.language });
+        const r = MathCheck.compare(student, reference, ex.rules, ex.rubric || null,
+            { language: ex.language, logicNotation: kbd.config.logicNotation });   // and / or as on the keyboard
         attempts += 1;
         const grade = result.querySelector(".grade");
         grade.textContent = r.grade + "%";

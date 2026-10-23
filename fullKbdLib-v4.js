@@ -3,7 +3,7 @@
  * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
  */
 /*
- * MoodleMathKeyboard V4 (version 4.1.3 - MoodleMathKeyboard.version)
+ * MoodleMathKeyboard V4 (version 4.2.0 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -52,6 +52,7 @@ let DEFAULT_CONFIG = {
     implicitMultiply: true,
     showImplicitMultiply: true,
     placeholderTooltips: true,
+    logicNotation: "symbols",   // and / or: "symbols" ∧ ∨ | "english" AND OR | "language" the words of config.language
     fixedCalculusVariable: null,
     variables: [
         { id: "x", label: "x", latex: "x" },
@@ -460,6 +461,8 @@ let TOOLTIP_TEXT = {
     "Open keyboard": { he: "פתיחת המקלדת", ar: "فتح لوحة المفاتيح" },
     "Close": { he: "סגירה", ar: "إغلاق" },
     "Comma": { he: "פסיק", ar: "فاصلة" },
+    "And (both)": { he: "וגם (שניהם)", ar: "و (كلاهما)" },
+    "Or": { he: "או", ar: "أو" },
     "Infinity": { he: "אינסוף", ar: "ما لا نهاية" },
     "Factorial": { he: "עצרת", ar: "عاملي" },
     "Percent": { he: "אחוז", ar: "نسبة مئوية" },
@@ -3074,6 +3077,30 @@ MoodleMathKeyboard.prototype.isRootSequence = function (seq) {
 MoodleMathKeyboard.prototype.multiplyLatex = function () {
     return this.config.multiplicationSymbol === "times" ? "\\times " : "\\cdot ";
 };
+/*
+ * and / or as the student sees them (config.logicNotation, 2026-10-23): "symbols" ∧ ∨ (default), "english" AND OR,
+ * "language" the words in the keyboard's language (and/or, וגם/או, و/أو). Display only: the tree is and / or always.
+ */
+let LOGIC_WORDS = {
+    en: { and: "and", or: "or" },
+    he: { and: "וגם", or: "או" },
+    ar: { and: "و", or: "أو" }
+};
+MoodleMathKeyboard.prototype.logicLatex = function (op) {
+    let notation = this.config.logicNotation || "symbols";
+    if (notation === "english") return "\\;\\text{" + (op === "and" ? "AND" : "OR") + "}\\;";
+    if (notation === "language") {
+        let words = LOGIC_WORDS[this.config.language] || LOGIC_WORDS.en;
+        let word = words[op];
+        /*
+         * MathJax draws the letters of \text one by one from left to right (no bidi): a Hebrew / Arabic word is given
+         * in reverse so it shows the right way (או, not וא). Holds wherever the LaTeX is drawn by MathJax.
+         */
+        if (this.config.language === "he" || this.config.language === "ar") word = Array.from(word).reverse().join("");
+        return "\\;\\text{" + word + "}\\;";
+    }
+    return op === "and" ? "\\land " : "\\lor ";
+};
 MoodleMathKeyboard.prototype.renderNode = function(node, editing) {
     if (!node) return "";
 
@@ -4495,12 +4522,14 @@ MoodleMathKeyboard.prototype.addSymbolGroup = function(body, groupName) {
         if (i % 5 === 0) row = this.makeRow(body);
 
         (function(symbol) {
-            let button = self.makeButton(row, symbol.latex, symbol.title, 
+            /* and / or: the label in the configured notation (∧ ∨, AND OR, or words in the keyboard's language) */
+            let logic = symbol.op === "and" || symbol.op === "or";
+            let button = self.makeButton(row, logic ? self.logicLatex(symbol.op) : symbol.latex, symbol.title,
                 symbol.type == "separator"  ? function() {self.insertSeparator(symbol);} :
                 function() {self.insertSymbolDefinition(symbol);}
             );
             button.style.minWidth = "42px";
-            button.style.width = "42px";
+            button.style.width = logic && (self.config.logicNotation || "symbols") !== "symbols" ? "auto" : "42px";
         })(group.symbols[i]);
     }
 };
@@ -4785,6 +4814,10 @@ let NODE_DEFS = {
 
             if (node.op === "*") {
                 return kbd.multiplyLatex();
+            }
+
+            if (node.op === "and" || node.op === "or") {
+                return kbd.logicLatex(node.op);
             }
 
             if (def) {
@@ -5834,6 +5867,21 @@ let SYMBOL_GROUPS = {
         title: "Logic",
         enabledBy: "logic",
         symbols: [
+            /* and / or: the label and the drawing follow config.logicNotation (logicLatex) */
+            {
+                id: "and",
+                latex: "\\land ",
+                title: "And (both)",
+                type: "operator",
+                op: "and"
+            },
+            {
+                id: "or",
+                latex: "\\lor ",
+                title: "Or",
+                type: "operator",
+                op: "or"
+            },
             {
                 id: "forall",
                 latex: "\\forall ",
@@ -6093,6 +6141,9 @@ let OPERATOR_DEFS = {
     notEqual: { actionType: "relation", latex: "\\ne " },
 
     approximate: { actionType: "relation", latex: "\\approx " },
+    /* and / or join statements (x < 1 ∨ x > 4); drawn by logicLatex (config.logicNotation) */
+    and: { actionType: "relation", latex: "\\land " },
+    or: { actionType: "relation", latex: "\\lor " },
     memberOf: { actionType: "relation", latex: "\\in " },
     notMemberOf: { actionType: "relation", latex: "\\notin " },
     implies: { actionType: "relation", latex: "\\Rightarrow " },
@@ -6648,8 +6699,9 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * The library version (MoodleMathKeyboard.version). 4.1.0 (2026-10-22): the MathJax queue, no cursor in getLatex(),
  * no button for an empty panel. 4.1.1 (2026-10-23): AC clears the unit too. 4.1.2: e and i typed on the computer
  * keyboard are the constants (as the panel keys), not variables. 4.1.3: a comma at the top level (x = 1, 5 - it was
- * dropped and the digits joined).
+ * dropped and the digits joined). 4.2.0: and / or keys in the Logic group, shown by config.logicNotation
+ * ("symbols" ∧ ∨, "english" AND OR, "language" and/or, וגם/או, و/أو).
  */
-MoodleMathKeyboard.version = "4.1.3";
+MoodleMathKeyboard.version = "4.2.0";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();

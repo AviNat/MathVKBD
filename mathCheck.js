@@ -1054,8 +1054,8 @@ function latex(node, parentPrec) {
                 case "^": return "{" + latex(o[0], 9) + "}^{" + latex(o[1]) + "}";
                 case "plusMinus": return wrap(o.length === 2 ? latex(o[0], 2) + "\\pm " + latex(o[1], 3) : "\\pm " + latex(o[0], 3), 2);
                 case "minusPlus": return wrap(o.length === 2 ? latex(o[0], 2) + "\\mp " + latex(o[1], 3) : "\\mp " + latex(o[0], 3), 2);
-                case "and": return o.map(function (x) { return latex(x); }).join("\\land ");
-                case "or": return o.map(function (x) { return latex(x); }).join("\\lor ");
+                case "and": return o.map(function (x) { return latex(x); }).join(logicJoin("and"));
+                case "or": return o.map(function (x) { return latex(x); }).join(logicJoin("or"));
             }
         }
     }
@@ -1087,8 +1087,8 @@ const TEXT = {
         "missing-excluded": "A value to exclude is missing.",
         "missing-excluded-named": "The value \\({element}\\) should be excluded too.",
         "extra-excluded": "\\({element}\\) should not be excluded.",
-        "solution-list": "A list after \\(=\\) is not a proper form: write \\({joined}\\) or \\({set}\\).",
-        "exclusion-list": "A list after \\(\\ne\\) is not a proper form: write \\({joined}\\) or \\({set}\\).",
+        "solution-list": "Writing the solutions with commas is not a proper form: write \\({joined}\\) or \\({set}\\).",
+        "exclusion-list": "Writing the excluded values with commas is not a proper form: write \\({joined}\\) or \\({set}\\).",
         "solution-form-not-accepted": "The values are right, but write the answer in the form \\({form}\\).",
         "missing-plus-minus": "Only one of the two values: the answer should have \\(\\pm\\) (both values).",
         "pm-first-wrong": "The part before \\(\\pm\\) is not correct.",
@@ -1185,8 +1185,8 @@ const TEXT = {
         "missing-excluded": "חסר ערך שצריך להוציא.",
         "missing-excluded-named": "צריך להוציא גם את \\({element}\\).",
         "extra-excluded": "אין להוציא את \\({element}\\).",
-        "solution-list": "רשימה אחרי \\(=\\) אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
-        "exclusion-list": "רשימה אחרי \\(\\ne\\) אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
+        "solution-list": "כתיבת הפתרונות עם פסיקים אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
+        "exclusion-list": "כתיבת הערכים המוצאים עם פסיקים אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
         "solution-form-not-accepted": "הערכים נכונים, אבל יש לכתוב את התשובה בצורה \\({form}\\).",
         "missing-plus-minus": "רק אחד משני הערכים: בתשובה צריך \\(\\pm\\) (שני הערכים).",
         "pm-first-wrong": "החלק שלפני \\(\\pm\\) אינו נכון.",
@@ -1283,8 +1283,8 @@ const TEXT = {
         "missing-excluded": "تنقص قيمة يجب استثناؤها.",
         "missing-excluded-named": "يجب استثناء \\({element}\\) أيضًا.",
         "extra-excluded": "يجب ألا يُستثنى \\({element}\\).",
-        "solution-list": "القائمة بعد \\(=\\) ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
-        "exclusion-list": "القائمة بعد \\(\\ne\\) ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
+        "solution-list": "كتابة الحلول بالفواصل ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
+        "exclusion-list": "كتابة القيم المستثناة بالفواصل ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
         "solution-form-not-accepted": "القيم صحيحة، لكن اكتب الإجابة بالصيغة \\({form}\\).",
         "missing-plus-minus": "قيمة واحدة فقط من القيمتين: يجب أن تحتوي الإجابة على \\(\\pm\\) (القيمتين).",
         "pm-first-wrong": "الجزء قبل \\(\\pm\\) غير صحيح.",
@@ -2035,7 +2035,8 @@ function compareOne(student, reference, rules, options, debug) {
         if (ss.form === "list") {
             add(kind, solutions ? "solution-list" : "exclusion-list", properForms(ss, solutions), [s]);
         } else {
-            add(kind, "solution-form-not-accepted", { form: FORM_TEMPLATE[rs.kind][rs.form] || "" }, [s]);
+            add(kind, "solution-form-not-accepted", { form: (FORM_TEMPLATE[rs.kind][rs.form] || "")
+                .replace("\\lor ", logicJoin("or")).replace("\\land ", logicJoin("and")) }, [s]);
         }
     }
 
@@ -2211,6 +2212,13 @@ function valueSetOf(a) {
     if (a.type === "list" && a.items.length > 1 && a.items[0] && a.items[0].type === "relation" &&
         (a.items[0].op === "notEqual" || a.items[0].op === "equal") && isVar(a.items[0].left)) {
         const rest = a.items.slice(1);
+        /* x ≠ 2, x ≠ 8 (or x = 1, x = 5): a list of statements, each a single value of the same variable - the comma
+           joins ≠ by AND (excluded values) and = by OR (solutions) */
+        const statements = a.items.map(valueSetOf);
+        if (statements.every(function (p) { return p && p.form === "single" && p.kind === statements[0].kind && p.variable === statements[0].variable; })) {
+            return { variable: statements[0].variable, kind: statements[0].kind, form: "list",
+                values: statements.map(function (p) { return p.values[0]; }) };
+        }
         if (rest.some(function (n) { return !n || hasVariable(n); })) return null;
         return { variable: varKey(a.items[0].left), kind: a.items[0].op === "equal" ? "equal" : "notEqual", form: "list",
             values: [a.items[0].right].concat(rest) };
@@ -2228,8 +2236,8 @@ function valueSetOf(a) {
 function properForms(set, solutions) {
     const values = set.values.map(function (v) { return latex(v); });
     return solutions
-        ? { joined: values.map(function (v) { return set.variable + "=" + v; }).join("\\lor "), set: set.variable + "\\in\\left\\{" + values.join(",") + "\\right\\}" }
-        : { joined: values.map(function (v) { return set.variable + "\\ne " + v; }).join("\\land "), set: set.variable + "\\notin\\left\\{" + values.join(",") + "\\right\\}" };
+        ? { joined: values.map(function (v) { return set.variable + "=" + v; }).join(logicJoin("or")), set: set.variable + "\\in\\left\\{" + values.join(",") + "\\right\\}" }
+        : { joined: values.map(function (v) { return set.variable + "\\ne " + v; }).join(logicJoin("and")), set: set.variable + "\\notin\\left\\{" + values.join(",") + "\\right\\}" };
 }
 
 /*
@@ -2469,7 +2477,34 @@ function validateRubric(rubric) {
 /* ============================================================
    THE API
    ============================================================ */
+/*
+ * and / or in the feedback as the keyboard shows them (options.logicNotation, the keyboard's config.logicNotation):
+ * "symbols" ∧ ∨ (default), "english" AND OR, "language" the words of the feedback language. Set for one compare.
+ */
+let LOGIC = { notation: "symbols", language: "en" };
+const LOGIC_WORDS = { en: { and: "and", or: "or" }, he: { and: "וגם", or: "או" }, ar: { and: "و", or: "أو" } };
+function logicJoin(op) {
+    if (LOGIC.notation === "english") return "\\;\\text{" + (op === "and" ? "AND" : "OR") + "}\\;";
+    if (LOGIC.notation === "language") {
+        let word = (LOGIC_WORDS[LOGIC.language] || LOGIC_WORDS.en)[op];
+        /* MathJax draws \text letters left to right (no bidi): a Hebrew / Arabic word in reverse, as in the keyboard */
+        if (LOGIC.language === "he" || LOGIC.language === "ar") word = Array.from(word).reverse().join("");
+        return "\\;\\text{" + word + "}\\;";
+    }
+    return op === "and" ? "\\land " : "\\lor ";
+}
+
 function compare(student, reference, rules, rubric, options) {
+    const saved = LOGIC;
+    LOGIC = { notation: (options && options.logicNotation) || "symbols", language: (options && options.language) || "en" };
+    try {
+        return compareWith(student, reference, rules, rubric, options);
+    } finally {
+        LOGIC = saved;
+    }
+}
+
+function compareWith(student, reference, rules, rubric, options) {
     options = options || {};
     const R = merge(DEFAULT_RULES, rules || {});
     /* a rubric's categories replace the defaults (the teacher's table is the whole table) */

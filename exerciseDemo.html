@@ -108,7 +108,10 @@ document.getElementById("submit").addEventListener("click", function () {
         ? { answer: EXERCISE.reference, unit: EXERCISE.referenceUnit }
         : EXERCISE.reference;
 
-    const result = MathCheck.compare(answer, reference, EXERCISE.rules, EXERCISE.rubric, { language: EXERCISE.language });
+    const result = MathCheck.compare(answer, reference, EXERCISE.rules, EXERCISE.rubric, {
+        language: EXERCISE.language,                          // the feedback language
+        logicNotation: EXERCISE.keyboard.logicNotation        // and / or in the feedback as on the keyboard (∧ ∨ by default)
+    });
     // result.grade    - 0..100
     // result.correct  - true when there is no error (notes are allowed)
     // result.feedback - text with \( \) LaTeX; result.items - the errors and notes one by one

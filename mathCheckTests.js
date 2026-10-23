@@ -206,7 +206,17 @@ const CASES = [
     { group: "Exclusions", name: "x ∉ {1, 5, 0} for x ∉ {1, 5}: set against set - the membership wording", ref: "(notMemberOf x set{1, 5})", student: "(notMemberOf x set{1, 5, 0})", expect: { grade: 75, codes: ["extra-element"] } },
     { group: "Exclusions", name: "x ≠ 1 ∧ x ≠ 5 ∧ x ≠ 0 for x ∉ {1, 5}: 0 should not be excluded", ref: "(notMemberOf x set{1, 5})", student: "(and (notEqual x 1) (notEqual x 5) (notEqual x 0))", expect: { grade: 75, codes: ["extra-excluded"], feedbackIncludes: "should not be excluded" } },
     { group: "Exclusions", name: "x ∈ {1, 5} for x ∉ {1, 5}: not the same kind", ref: "(notMemberOf x set{1, 5})", student: "(memberOf x set{1, 5})", expect: { grade: 50, codes: ["wrong-relation"] } },
-    { group: "Exclusions", name: "Hebrew: a list after ≠", ref: "(notMemberOf x set{1, 5})", student: "list[(notEqual x 1), 5]", language: "he", expect: { feedbackIncludes: "רשימה אחרי" } },
+    { group: "Exclusions", name: "x ≠ 2, x ≠ 8 for x ∉ {2, 8}: a list of statements, noted", ref: "(notMemberOf x set{2, 8})", student: "list[(notEqual x 2), (notEqual x 8)]", expect: { grade: 100, notes: ["exclusion-list"] } },
+    { group: "Exclusions", name: "x ≠ 2, x ≠ 8 for x ≠ 2 ∧ x ≠ 8", ref: "(and (notEqual x 2) (notEqual x 8))", student: "list[(notEqual x 2), (notEqual x 8)]", expect: { grade: 100, notes: ["exclusion-list"] } },
+    { group: "Exclusions", name: "x ≠ 2, x ≠ 7 for x ∉ {2, 8}: 7 wrong, 8 missing", ref: "(notMemberOf x set{2, 8})", student: "list[(notEqual x 2), (notEqual x 7)]", expect: { grade: 50, codes: ["extra-excluded", "missing-excluded"] } },
+    { group: "Exclusions", name: "x ≠ 2, y ≠ 8: two variables - not a set of excluded values", ref: "(notMemberOf x set{2, 8})", student: "list[(notEqual x 2), (notEqual y 8)]", expect: { grade: 0 } },
+    { group: "Solutions", name: "x = 1, x = 5 for x = 3 ± 2: a list of statements, noted", ref: "x ‖ (plusMinus 3 2)", student: "list[(equal x 1), (equal x 5)]", expect: { grade: 100, notes: ["solution-list"] } },
+    { group: "Logic notation", name: "symbols (default): x ≠ 1 ∧ x ≠ 5 in the note", ref: "(notMemberOf x set{1, 5})", student: "list[(notEqual x 1), 5]", expect: { feedbackIncludes: "x\\ne 1\\land x\\ne 5" } },
+    { group: "Logic notation", name: "english: AND", ref: "(notMemberOf x set{1, 5})", student: "list[(notEqual x 1), 5]", logicNotation: "english", expect: { feedbackIncludes: "\\text{AND}" } },
+    { group: "Logic notation", name: "language en: or (the set form not accepted)", ref: "(or (equal x 1) (equal x 5))", student: "(memberOf x set{1, 5})", rules: { solutions: { set: false } }, logicNotation: "language", expect: { feedbackIncludes: "\\text{or}" } },
+    { group: "Logic notation", name: "language he: או, reversed for MathJax", ref: "x ‖ (plusMinus 3 2)", student: "x ‖ list[1, 5]", language: "he", logicNotation: "language", expect: { feedbackIncludes: "\\text{וא}" } },
+    { group: "Logic notation", name: "language ar: and in a named part", ref: "(and (less 3 x) (less x 5))", student: "(and (less 3 x) (less x 7))", language: "ar", logicNotation: "language", expect: { grade: 50 } },
+    { group: "Exclusions", name: "Hebrew: the excluded values with commas", ref: "(notMemberOf x set{1, 5})", student: "list[(notEqual x 1), 5]", language: "he", expect: { feedbackIncludes: "עם פסיקים" } },
     { group: "Complex", name: "0.12 − 0.16i for (3+4i)⁻¹", ref: "(^ (+ 3 (* 4 i)) -1)", student: "(+ 0.12 (neg (* 0.16 i)))", expect: { grade: 100 } },
     { group: "Complex", name: "(3+4i)⁻¹ for 0.12 − 0.16i", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -1)", expect: { grade: 100 } },
     { group: "Complex", name: "1/(3+4i) for 0.12 − 0.16i", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(/ 1 (+ 3 (* 4 i)))", expect: { grade: 100 } },
@@ -440,6 +450,7 @@ const E2E = [
     { name: "x = 1, 5 typed for x = 3 ± 2 typed: a list, noted", refKeys: "x = 3 ± 2", studentKeys: "x = 1 , 5", expect: { grade: 100, notes: ["solution-list"] } },
     { name: "x ∈ {1, 5} typed for x = 3 ± 2 typed", refKeys: "x = 3 ± 2", studentKeys: "x ∈ { 1 , 5", expect: { grade: 100 } },
     { name: "x ≠ 1, 5 typed for x ∉ {1, 5} typed: a list, noted", refKeys: "x ∉ { 1 , 5", studentKeys: "x ≠ 1 , 5", expect: { grade: 100, notes: ["exclusion-list"] } },
+    { name: "x ≠ 2, x ≠ 8 typed for x ∉ {2, 8} typed", refKeys: "x ∉ { 2 , 8", studentKeys: "x ≠ 2 , x ≠ 8", expect: { grade: 100, notes: ["exclusion-list"] } },
     { name: "x ≠ 1 typed for x ∉ {1, 5} typed: 5 should be excluded too", refKeys: "x ∉ { 1 , 5", studentKeys: "x ≠ 1", expect: { grade: 75, codes: ["missing-excluded"] } },
     { name: "sin(π/2) typed for 1", refKeys: "1", studentKeys: "sin π / 2", expect: { grade: 100, equivalence: "numberForms" } },
     { name: "d/dx sin x² typed back for 2x cos x²", refKeys: "2 x cos x ^2", studentKeys: "d/dx x → sin x ^2", expect: { grade: 0, codes: ["not-evaluated"] } },
@@ -485,7 +496,7 @@ function run(MathCheck) {
             if (c.refUnit !== undefined) ref = { answer: ref, unit: c.refUnit };
             if (c.studentUnit !== undefined) stu = { answer: stu, unit: c.studentUnit || null };
             out.result = MathCheck.compare(stu, ref,
-                prepareRules(c.rules), c.rubric, { language: c.language || "en" });
+                prepareRules(c.rules), c.rubric, { language: c.language || "en", logicNotation: c.logicNotation });
             out.problems = check(out.result, c.expect);
             out.pass = out.problems.length === 0;
         } catch (e) {

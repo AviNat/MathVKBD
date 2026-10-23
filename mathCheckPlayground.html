@@ -131,6 +131,7 @@ main[hidden] { display: none; }
       The file has its own extension, <code>.mchk</code> (a mathCheck exercise; JSON inside). Older <code>.json</code>
       files still open - Save then makes a new <code>.mchk</code> file.</div>
     <div class="file-bar">
+      <button type="button" id="newBtn">New</button>
       <button type="button" id="openBtn">Open…</button>
       <button type="button" id="saveBtn" class="primary">Save</button>
       <button type="button" id="saveAsBtn">Save as…</button>
@@ -524,6 +525,7 @@ const KB_GROUPS = [
     { title: "General", fields: [
         { path: "language", label: "Language (tooltips)", type: "select", options: ["en", "he", "ar"] },
         { path: "multiplicationSymbol", label: "Multiplication sign", type: "select", options: ["cdot", "times"] },
+        { path: "logicNotation", label: "and / or shown as (symbols ∧ ∨, english AND OR, language: the keyboard's language)", type: "select", options: ["symbols", "english", "language"] },
         { path: "enableEquals", label: "The \"=\" key", type: "check" },
         { path: "complexNumbers", label: "Complex numbers (i)", type: "check" },
         { path: "sets", label: "Sets { }", type: "check" },
@@ -576,7 +578,7 @@ const KB_GROUPS = [
 
 /* the presets (the variables as text, as in the form) */
 const ALL_ON = {
-    language: "en", multiplicationSymbol: "cdot", enableEquals: true, complexNumbers: true, sets: true,
+    language: "en", multiplicationSymbol: "cdot", logicNotation: "symbols", enableEquals: true, complexNumbers: true, sets: true,
     implicitMultiply: true, showImplicitMultiply: true, placeholderTooltips: true, fixedCalculusVariable: "",
     variables: "x, y, z, a, b, n, t, alpha", acceptLowercaseVariables: true, acceptUppercaseVariables: true,
     functions: { logarithmic: true, trigonometric: true, inverseTrigonometric: true, hyperbolic: true, inverseHyperbolic: true, namedFunction: true },
@@ -651,7 +653,8 @@ function keyboardConfig(s) {
 
 let KB = null;                         // the current settings
 function loadKbSettings() {
-    try { const saved = JSON.parse(localStorage.getItem("mathCheckPlayground.keyboard") || "null"); if (saved) return saved; } catch (e) { /* storage blocked */ }
+    /* settings saved before an option existed get its default (e.g. logicNotation) */
+    try { const saved = JSON.parse(localStorage.getItem("mathCheckPlayground.keyboard") || "null"); if (saved) return deepMerge(preset("full"), saved); } catch (e) { /* storage blocked */ }
     return preset("full");
 }
 function saveKbSettings() {
@@ -937,6 +940,36 @@ $("language").addEventListener("change", changedByUser);
 window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 function confirmDiscard() { return !dirty || window.confirm("The exercise has unsaved changes. Discard them?"); }
 
+/* New: a new exercise - the keyboard with everything, empty answers, the default rules and rubric, no file */
+function newExercise() {
+    if (!confirmDiscard()) return;
+    loading = true;
+    try {
+        writeKbForm(preset("full"));
+        KB = readKbForm();
+        saveKbSettings();
+        $("kbCode").value = keyboardCode(keyboardConfig(KB));
+        $("kbSummary").textContent = keyboardSummary(KB);
+        rebuild("kbPreviewHost");
+        checkerStale = true;
+        refreshChecker();
+        keyboards.refHost.clearAll();          // AC: the answer and its unit
+        keyboards.stuHost.clearAll();
+        writeRules({});
+        rubricToUi(MathCheck.defaults.rubric);
+        syncRubricJson();
+        $("language").value = "en";
+    } finally {
+        loading = false;
+    }
+    fileHandle = null;
+    fileName = null;
+    setDirty(false);
+    check();
+    showFileTab();
+}
+$("newBtn").addEventListener("click", newExercise);
+
 function showFileTab() {
     let pkg;
     try { pkg = exercisePackage(); } catch (e) { $("packageJson").value = "The rubric JSON is not valid: " + e.message; return; }
@@ -1062,9 +1095,11 @@ function check() {
     $("code").value = codeText(rules, rubric, ref);
     /* a unit chosen on the reference keyboard: both answers with their units */
     const refUnit = keyboards.refHost.getUnit();
+    /* and / or in the feedback as on the student's keyboard (tab 1) */
+    const options = { language: $("language").value, logicNotation: KB.logicNotation || "symbols", debug: true };
     const result = refUnit
-        ? MathCheck.compare({ answer: stu, unit: keyboards.stuHost.getUnit() || null }, { answer: ref, unit: refUnit }, rules, rubric, { language: $("language").value, debug: true })
-        : MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
+        ? MathCheck.compare({ answer: stu, unit: keyboards.stuHost.getUnit() || null }, { answer: ref, unit: refUnit }, rules, rubric, options)
+        : MathCheck.compare(stu, ref, rules, rubric, options);
 
     $("grade").textContent = result.grade + "%";
     $("grade").style.color = result.grade === 100 ? "var(--ok)" : "var(--bad)";

@@ -406,7 +406,10 @@ check: {
 ---
 
 ## 7. Open decisions
-- AND/OR key label: `∧`/`∨` or `and`/`or`.
+- ~~AND/OR key label: `∧`/`∨` or `and`/`or`.~~ Decided 2026-10-23: a configuration option, `logicNotation`:
+  `"symbols"` ∧ ∨ (default), `"english"` AND OR, `"language"` the words of the keyboard's language (and/or, וגם/או,
+  و/أو). The keys are in the Logic group (keyboard 4.2.0); display only - the AST is `and` / `or` in every mode.
+  Hebrew / Arabic words are given to MathJax in reverse (it draws `\text` letters left to right).
 - Dot product and cross product: are they needed?
 - Interval structure (key) to avoid the clash with tuples.
 - Does a derivation need to be a required kind of answer?

@@ -429,7 +429,9 @@ const SECTIONS = [
                 { caption: "not named", ref: "set{1, 2, 3}", student: "set{1, 2}", rules: { feedback: { nameMissing: false } }, expect: { grade: 75, codes: ["missing-element"] } }
             ]
         },
-        { id: "feedback.messages", path: "rules.feedback.messages", values: "{ code: { en, he, ar } }", text: { en: "The teacher's own text for an error or note code (e.g. \"missing-element\"), replacing the built-in one." } }
+        { id: "feedback.messages", path: "rules.feedback.messages", values: "{ code: { en, he, ar } }", text: { en: "The teacher's own text for an error or note code (e.g. \"missing-element\"), replacing the built-in one." } },
+        { id: "options.logicNotation", path: "compare(…, options).logicNotation", values: "\"symbols\" (default) | \"english\" | \"language\"",
+          text: { en: "and / or in the feedback as the student's keyboard shows them (pass the keyboard's config.logicNotation): ∧ ∨, AND OR, or the words of the feedback language (and/or, וגם/או, و/أو). An option of compare, like language - not a rule." } }
     ]
 },
 {
