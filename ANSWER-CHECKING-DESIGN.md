@@ -96,6 +96,53 @@ Only inside brackets:
 - `x = 2, 3` **is not accepted** (mathematically wrong). Students will write it, so it should be recognized
   and given specific feedback ("write x=2 ∨ x=3"); internally it can be converted to `OR` so the values can still be checked.
 
+### Symbol groups - DRAFT, waiting for a math educator's review (2026-10-22)
+The user will align the groups with the curriculum and its conventions before anything is changed. Proposal:
+
+Today (v4.1.0): General `∞ ! % ∅ ≈ ± ∓ ℕ ℤ ℚ ℝ ℂ`, Relations `< ≤ > ≥ ≠`, Logic `∀ ∃ ∈ ∉ ⇒`, Geometry `° ∠ △ ≅ ∼ ∥ ⊥`.
+Problems: set symbols in General and Logic, `≈` not with the relations, no `∧ ∨ ¬`, no relation `=`.
+
+Principles: every group has its own flag and a question turns on only its subject's groups (an empty panel has no
+button - done); every key in exactly one group; every key has a meaning in the AST that mathCheck can compare.
+
+| Group (flag) | Keys | For |
+|---|---|---|
+| General `general` | ∞ ± ∓ ! % | everywhere |
+| Relations `relations` | < ≤ > ≥ ≠ ≈ = | inequalities, conditions |
+| Logic `logic` | ∧ ∨ ¬ ⇒ ⇔ | compound statements |
+| Quantifiers `quantifiers` | ∀ ∃ | rare, off by default |
+| Sets `sets` | ∈ ∉ ⊂ ⊆ ⊄ ⊃ ⊇ ∪ ∩ ∖ A′ ∅ | sets, solution sets |
+| Number sets `numberSets` | ℕ ℤ ℚ ℝ ℂ ℝ⁺ | domains (x ∈ ℝ) |
+| Intervals `intervals` (a structure) | [a, b] (a, b) [a, b) (a, b] | inequality solutions; not a tuple (see Comma) |
+| Geometry `geometry` | ° ∠ △ ≅ ∼ ∥ ⊥, segment AB̄, arc ⌒AB | geometry |
+| Probability and combinatorics `probability` | P( ), P(A ∣ B), (n k), nPr, A′ | probability, counting |
+| Statistics `statistics` | x̄, σ, s (Σ is in structures) | statistics |
+| Number theory `numberTheory` | ∣ (divides), gcd, lcm, mod | divisibility |
+| Vectors `vectors` | · (dot), × (cross), \|v⃗\|, î ĵ k̂ | physics, 3-unit math |
+
+Complex numbers (i, conjugate, |z|, perhaps Re, Im, arg) stay under `complexNumbers`.
+
+**One `=` key, not two:** the library decides by place - at the top level between two expressions an equation (the
+chain), inside a statement (a side of ∧ / ∨ / ⇒, a set condition) the relation `equal`; mathCheck treats a top-level
+relation `=` as an equation, so the student cannot lose points for the "wrong" `=`. (Refines 4.5.)
+
+Checker: ∧ ∨ and ∈ ∉ are supported; new are ¬ ⇔, ∪ ∩ ∖ and the complement, ⊂ ⊆ (open: ⊆ for ⊂?), intervals (as sets
+of numbers), P(…), binomial, gcd / lcm / divides (numeric).
+
+Suggested order: 1. regroup + Logic, Sets, Number sets + the one-`=` rule; 2. intervals; 3. probability and number
+theory; 4. statistics and vectors by demand.
+
+**To fix with the regrouping (found 2026-10-23, the user: wait for the reorg):** `DEFAULT_CONFIG.symbols` in
+fullKbdLib-v4.js uses the names `infinity, degrees, factorial, approximate, inequalities, logic`, but the groups are
+enabled by `general, relations, logic, geometry` (`SYMBOL_GROUPS[...].enabledBy`) - only `logic` matches, so a
+configuration that omits `symbols` gets only the Logic group, not all symbols. The defaults must use the (new) group
+names. Note for the documentation: the configuration is merged one level deep - an omitted key takes the default, a
+given object (`functions: {}` or `{ trigonometric: true }`) replaces the default object as a whole.
+
+Questions for the educator: which groups each subject / grade needs; the notation conventions in the curriculum
+(A′ or Ā for the complement, ⊂ or ⊊ for proper inclusion, the interval brackets, nPr / P(n,k), (n k) or C(n,k));
+whether ∀ ∃ appear at all; whether the keys should be labelled by symbol only (decided: labels are never localized).
+
 ### Panels and the `=` key (2026-10-21)
 - **An empty panel has no button** (done 2026-10-21): the main-panel buttons Functions `f()…`, Structures `∫∑` and
   Symbols `∞≤` are created only when the configuration puts a key in the panel (`panelHasContent`: any `functions`
@@ -361,3 +408,4 @@ check: {
 - Whether `semanticSequence` output keeps ids (section 3).
 - Whether postfix is already a structure (`wrapPreviousPostfix`).
 - `maxEquals` for v4 (as in STEMkbd) - pending, see section 2 "Panels and the `=` key".
+- The symbol groups - draft in section 2, waiting for the user's consultation with a math educator (curriculum and conventions).

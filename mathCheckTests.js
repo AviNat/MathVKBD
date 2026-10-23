@@ -152,6 +152,48 @@ const CASES = [
     { group: "Functions", name: "asinh(x) = ln(x + √(x²+1))", ref: "asinh(x)", student: "ln((+ x sqrt((+ (^ x 2) 1))))", expect: { grade: 100 } },
     { group: "Functions", name: "atanh for tanh", ref: "tanh(x)", student: "atanh(x)", rules: { value: { variables: { x: { min: -0.9, max: 0.9 } } } }, expect: { grade: 0 } },
     { group: "Functions", name: "y = asin(x) as sin(y) = x? (no: other branches)", ref: "y ‖ asin(x)", student: "sin(y) ‖ x", expect: { grade: 0 } },
+    { group: "Units", name: "2 km for 2 km", ref: "2", refUnit: "km", student: "2", studentUnit: "km", expect: { grade: 100 } },
+    { group: "Units", name: "2000 m for 2 km: converted", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", expect: { grade: 100 } },
+    { group: "Units", name: "2000 m for 2 km, other units noted", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { otherUnits: "note" } }, expect: { grade: 100, notes: ["note-other-unit"] } },
+    { group: "Units", name: "2000 m for 2 km, other units not accepted", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { otherUnits: false } }, expect: { grade: 70, codes: ["unit-not-accepted"], feedbackIncludes: "Write the answer in" } },
+    { group: "Units", name: "2 without a unit", ref: "2", refUnit: "km", student: "2", studentUnit: "", expect: { grade: 70, codes: ["missing-unit"], feedbackIncludes: "The unit is missing." } },
+    { group: "Units", name: "2 km/h: a unit of speed for a length", ref: "2", refUnit: "km", student: "2", studentUnit: "km/h", expect: { grade: 70, codes: ["wrong-unit"], feedbackIncludes: "is not a unit of length" } },
+    { group: "Units", name: "2 m for 2 km: a wrong value", ref: "2", refUnit: "km", student: "2", studentUnit: "m", expect: { grade: 0, codes: ["scale-error"] } },
+    { group: "Units", name: "120 km for 2 km (12 · 10 without converting minutes)", ref: "2", refUnit: "km", student: "120", studentUnit: "km", expect: { grade: 0 } },
+    { group: "Units", name: "7200 s for 2 h", ref: "2", refUnit: "h", student: "7200", studentUnit: "s", expect: { grade: 100 } },
+    { group: "Units", name: "12 km/h as 10/3 m/s", ref: "12", refUnit: "km/h", student: "(/ 10 3)", studentUnit: "m/s", expect: { grade: 100 } },
+    { group: "Units", name: "a unit not asked for: ignored", ref: "2", student: "2", studentUnit: "km", expect: { grade: 100 } },
+    { group: "Units", name: "strict: 2000 m for 2 km", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { strict: true } }, expect: { grade: 70, codes: ["unit-not-accepted"] } },
+    { group: "Units", name: "strict: 2 km for 2 km", ref: "2", refUnit: "km", student: "2", studentUnit: "km", rules: { units: { strict: true } }, expect: { grade: 100 } },
+    { group: "Units", name: "a unit error fatal: no unit gives 0", ref: "2", refUnit: "km", student: "2", studentUnit: "", rubric: { fatal: ["incomplete", "answerType", "units"] }, expect: { grade: 0, codes: ["missing-unit"] } },
+    { group: "Units", name: "strict + fatal: 2000 m gives 0", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { strict: true } }, rubric: { fatal: ["incomplete", "answerType", "units"] }, expect: { grade: 0, codes: ["unit-not-accepted"] } },
+    { group: "Units", name: "units category 50", ref: "2", refUnit: "km", student: "2", studentUnit: "", rubric: { categories: { value: { mode: "once", points: 100 }, units: { mode: "once", points: 50 } } }, expect: { grade: 50 } },
+    { group: "Form checks", name: "√(1/2) for √2/2: rational denominator noted", ref: "(/ sqrt(2) 2)", student: "sqrt((/ 1 2))", rules: { form: { rationalDenominator: "note" } }, expect: { grade: 100, notes: ["irrational-denominator"] } },
+    { group: "Form checks", name: "√(1/4) for 1/2: a perfect square, nothing to note", ref: "(/ 1 2)", student: "sqrt((/ 1 4))", rules: { form: { rationalDenominator: "note" } }, expect: { grade: 100, codes: [] } },
+    { group: "Form checks", name: "√2/2 itself: nothing to note", ref: "(/ sqrt(2) 2)", student: "(/ sqrt(2) 2)", rules: { form: { rationalDenominator: "note" } }, expect: { grade: 100, codes: [] } },
+    { group: "Complex", name: "0.12 − 0.16i for (3+4i)⁻¹", ref: "(^ (+ 3 (* 4 i)) -1)", student: "(+ 0.12 (neg (* 0.16 i)))", expect: { grade: 100 } },
+    { group: "Complex", name: "(3+4i)⁻¹ for 0.12 − 0.16i", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -1)", expect: { grade: 100 } },
+    { group: "Complex", name: "1/(3+4i) for 0.12 − 0.16i", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(/ 1 (+ 3 (* 4 i)))", expect: { grade: 100 } },
+    { group: "Complex", name: "(3−4i)/25 for (3+4i)⁻¹", ref: "(^ (+ 3 (* 4 i)) -1)", student: "(/ (+ 3 (neg (* 4 i))) 25)", expect: { grade: 100 } },
+    { group: "Complex", name: "0.12 + 0.16i for (3+4i)⁻¹: the imaginary part wrong", ref: "(^ (+ 3 (* 4 i)) -1)", student: "(+ 0.12 (* 0.16 i))", expect: { grade: 0 } },
+    { group: "Complex", name: "−0.12 + 0.16i: a sign error", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(+ (neg 0.12) (* 0.16 i))", expect: { grade: 0, codes: ["sign-error"] } },
+    { group: "Complex", name: "i² = −1", ref: "(neg 1)", student: "(^ i 2)", expect: { grade: 100 } },
+    { group: "Complex", name: "(1+i)² = 2i", ref: "(* 2 i)", student: "(^ (+ 1 i) 2)", expect: { grade: 100 } },
+    { group: "Complex", name: "√−4 = 2i", ref: "(* 2 i)", student: "sqrt((neg 4))", expect: { grade: 100 } },
+    { group: "Complex", name: "√−4 alone (no i anywhere): not a real number", ref: "2", student: "sqrt((neg 4))", expect: { grade: 0 } },
+    { group: "Complex", name: "x + i with a variable", ref: "(+ (* 2 x) (* 2 i))", student: "(* 2 (+ x i))", expect: { grade: 100 } },
+    { group: "Complex", name: "noRootOfNegative error: √−4 for 2i", ref: "(* 2 i)", student: "sqrt((neg 4))", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 90, codes: ["root-of-negative"], feedbackIncludes: "with i" } },
+    { group: "Complex", name: "noRootOfNegative note: √−4 for 2i", ref: "(* 2 i)", student: "sqrt((neg 4))", rules: { form: { noRootOfNegative: "note" } }, expect: { grade: 100, notes: ["root-of-negative"] } },
+    { group: "Complex", name: "noRootOfNegative: 2i itself, nothing", ref: "sqrt((neg 4))", student: "(* 2 i)", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 100, codes: [] } },
+    { group: "Complex", name: "noRootOfNegative: 3 + √−16 for 3 + 4i", ref: "(+ 3 (* 4 i))", student: "(+ 3 sqrt((neg 16)))", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 90, codes: ["root-of-negative"] } },
+    { group: "Complex", name: "noRootOfNegative: (−4)^½ for 2i", ref: "(* 2 i)", student: "(^ (neg 4) (/ 1 2))", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 90, codes: ["root-of-negative"] } },
+    { group: "Complex", name: "noRootOfNegative: √4 = 2 is not flagged", ref: "2", student: "sqrt(4)", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 100, codes: [] } },
+    { group: "Complex", name: "noRootOfNegative: ∛−8 = −2 (an odd root) is not flagged", ref: "(neg 2)", student: "nthRoot<index=3 content=(neg 8)>", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 100, codes: [] } },
+    { group: "Complex", name: "realDenominator note: (3+4i)⁻¹", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -1)", rules: { form: { realDenominator: "note" } }, expect: { grade: 100, notes: ["complex-denominator"], feedbackIncludes: "without i in the denominator" } },
+    { group: "Complex", name: "realDenominator error: 1/(3+4i)", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(/ 1 (+ 3 (* 4 i)))", rules: { form: { realDenominator: "error" } }, expect: { grade: 90, codes: ["complex-denominator"] } },
+    { group: "Complex", name: "realDenominator: 0.12 − 0.16i itself, nothing", ref: "(^ (+ 3 (* 4 i)) -1)", student: "(+ 0.12 (neg (* 0.16 i)))", rules: { form: { realDenominator: "error" } }, expect: { grade: 100, codes: [] } },
+    { group: "Complex", name: "realDenominator: a wrong value - no form check", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -2)", rules: { form: { realDenominator: "error" } }, expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Units", name: "Hebrew: the unit is missing", ref: "2", refUnit: "km", student: "2", studentUnit: "", language: "he", expect: { grade: 70, feedbackIncludes: "חסרה יחידת המידה" } },
     { group: "Form difference", name: "exact: (x+2)(x+3) for x²+5x+6 - factored, expanded expected", ref: "(+ (^ x 2) (* 5 x) 6)", student: "(* (+ x 2) (+ x 3))", rules: { value: { mode: "exact" } }, expect: { grade: 90, codes: ["not-equivalent-form"], feedbackIncludes: "the answer is factored and the expanded form is expected" } },
     { group: "Form difference", name: "exact: x²+5x+6 for (x+2)(x+3) - expanded, factored expected", ref: "(* (+ x 2) (+ x 3))", student: "(+ (^ x 2) (* 5 x) 6)", rules: { value: { mode: "exact" } }, expect: { grade: 90, feedbackIncludes: "the answer is expanded and the factored form is expected" } },
     { group: "Form difference", name: "structural, distributive off: the same message", ref: "(* (+ x 2) (+ x 3))", student: "(+ (^ x 2) (* 5 x) 6)", rules: { value: { mode: "structural" }, equivalence: { distributive: false } }, expect: { grade: 90, feedbackIncludes: "the factored form is expected" } },
@@ -339,6 +381,7 @@ const CASES = [
         section.items.forEach(function (item) {
             (item.examples || []).forEach(function (ex) {
                 CASES.push({ group: "Help: " + item.id, name: ex.caption, ref: ex.ref, student: ex.student,
+                    refUnit: ex.refUnit, studentUnit: ex.studentUnit,
                     rules: ex.rules, rubric: ex.rubric, language: ex.language, expect: ex.expect });
             });
         });
@@ -351,6 +394,9 @@ const E2E = [
     { name: "sin⁻¹ x typed, π/2 − cos⁻¹ x typed", refKeys: "asin x", studentKeys: "π / 2 → - acos x", expect: { grade: 100 } },
     { name: "CB⃗ + BA⃗ = CA⃗ typed for AB⃗ + BC⃗ = AC⃗", refKeys: "vec A B → + vec B C → = vec A C", studentKeys: "vec C B → + vec B A → = vec C A", expect: { grade: 100 } },
     { name: "x ∈ {2, 3} typed for x ∈ {2, 3, 5}", refKeys: "x ∈ { 2 , 3 , 5", studentKeys: "x ∈ { 2 , 3", expect: { grade: 75, codes: ["missing-element"], feedbackIncludes: "The element \\(5\\) is missing." } },
+    { name: "0.12 − 0.16i typed for (3+4i)⁻¹ typed", refKeys: "( 3 + 4 ⅈ → ^ - 1", studentKeys: "0 . 1 2 - 0 . 1 6 ⅈ", expect: { grade: 100 } },
+    { name: "(3+4i)⁻¹ typed, a complex denominator noted", refKeys: "0 . 1 2 - 0 . 1 6 ⅈ", studentKeys: "( 3 + 4 ⅈ → ^ - 1", rules: { form: { realDenominator: "note" } }, expect: { grade: 100, notes: ["complex-denominator"] } },
+    { name: "√−4 typed for 2i typed, the 2i form required", refKeys: "2 ⅈ", studentKeys: "√ - 4", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 90, codes: ["root-of-negative"] } },
     { name: "sin(π/2) typed for 1", refKeys: "1", studentKeys: "sin π / 2", expect: { grade: 100, equivalence: "numberForms" } },
     { name: "d/dx sin x² typed back for 2x cos x²", refKeys: "2 x cos x ^2", studentKeys: "d/dx x → sin x ^2", expect: { grade: 0, codes: ["not-evaluated"] } },
     { name: "x y = 8 typed, y = 8/x typed", refKeys: "x y = 8", studentKeys: "y = 8 / x", expect: { grade: 100, equivalence: "sameSolutions" } },
@@ -389,8 +435,12 @@ function run(MathCheck) {
     return CASES.map(function (c) {
         const out = { testCase: c, pass: false, problems: [], result: null, error: null };
         try {
-            const ref = c.refs ? c.refs.map(parse) : parse(c.ref);
-            out.result = MathCheck.compare(parse(c.student === "∅" ? null : c.student) || { type: "chain", elements: [] }, ref,
+            let ref = c.refs ? c.refs.map(parse) : parse(c.ref);
+            let stu = parse(c.student === "∅" ? null : c.student) || { type: "chain", elements: [] };
+            /* an answer with a unit: { answer, unit } (studentUnit "" = the student chose none) */
+            if (c.refUnit !== undefined) ref = { answer: ref, unit: c.refUnit };
+            if (c.studentUnit !== undefined) stu = { answer: stu, unit: c.studentUnit || null };
+            out.result = MathCheck.compare(stu, ref,
                 prepareRules(c.rules), c.rubric, { language: c.language || "en" });
             out.problems = check(out.result, c.expect);
             out.pass = out.problems.length === 0;

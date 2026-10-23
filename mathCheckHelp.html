@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Avi Nathan. All rights reserved.
+  No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -71,6 +75,10 @@ td.cfg { font-family: Consolas, monospace; font-size: 11.5px; color: var(--muted
 .mismatch { color: var(--bad); font-weight: 600; font-size: 12px; }
 .hidden { display: none; }
 #status { padding: 30px; color: var(--muted); }
+footer.contact { max-width: 1280px; margin: 8px auto 0; padding: 16px; border-top: 1px solid var(--line);
+                 text-align: center; font-size: 14px; color: var(--text); }
+footer.contact a { color: var(--accent); font-weight: 600; }
+footer.contact .copyright { margin-top: 4px; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -84,6 +92,10 @@ td.cfg { font-family: Consolas, monospace; font-size: 11.5px; color: var(--muted
   <nav id="toc"></nav>
   <main id="content"><div id="status">Loading…</div></main>
 </div>
+<footer class="contact">
+  Questions or suggestions? Write to Avi Nathan - <a href="mailto:avi.nathan58@gmail.com?subject=EduTech%20tools">avi.nathan58@gmail.com</a>
+  <div class="copyright">© 2026 Avi Nathan. All rights reserved.</div>
+</footer>
 
 <script>
 const $ = function (id) { return document.getElementById(id); };
@@ -101,18 +113,27 @@ function mathOf(compact) {
     try { return "\\(" + MathCheck.latex(MathCheckTests.parse(compact)) + "\\)"; } catch (e) { return esc(compact); }
 }
 
+/* the unit next to an example answer: km, or "(no unit)" when the student chose none */
+function unitText(unit) {
+    if (unit === undefined) return "";
+    return unit ? " \\(\\mathrm{" + unit + "}\\)" : " <span style='color:var(--muted)'>(no unit)</span>";
+}
+
 function exampleRow(ex, language) {
     let result, problems = [];
     try {
         const rules = ex.rules ? prepareMistakes(ex.rules) : undefined;
-        result = MathCheck.compare(MathCheckTests.parse(ex.student), MathCheckTests.parse(ex.ref), rules, ex.rubric, { language: language });
+        let stu = MathCheckTests.parse(ex.student), ref = MathCheckTests.parse(ex.ref);
+        if (ex.refUnit !== undefined) ref = { answer: ref, unit: ex.refUnit };
+        if (ex.studentUnit !== undefined) stu = { answer: stu, unit: ex.studentUnit || null };
+        result = MathCheck.compare(stu, ref, rules, ex.rubric, { language: language });
         if (ex.expect) problems = MathCheckTests.check(result, ex.expect);
     } catch (e) {
         return "<tr><td colspan='5' class='mismatch'>" + esc(e.message) + "</td></tr>";
     }
     const cfg = [ex.rules ? "rules: " + shortJs(ex.rules) : "", ex.rubric ? "rubric: " + shortJs(ex.rubric) : ""].filter(Boolean).join("<br>");
     return "<tr><td>" + esc(ex.caption || "") + "</td>" +
-        "<td>" + mathOf(ex.ref) + "</td><td>" + mathOf(ex.student) + "</td>" +
+        "<td>" + mathOf(ex.ref) + unitText(ex.refUnit) + "</td><td>" + mathOf(ex.student) + unitText(ex.studentUnit) + "</td>" +
         "<td class='cfg'>" + (cfg || "defaults") + "</td>" +
         "<td class='grade " + (result.grade === 100 ? "ok" : "bad") + "'>" + result.grade + "%</td>" +
         "<td class='fb' dir='" + (language === "en" ? "ltr" : "rtl") + "'>" + esc(result.feedback) +

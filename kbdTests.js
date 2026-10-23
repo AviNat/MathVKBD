@@ -239,6 +239,7 @@ let KEY_ACTIONS = {
     "!": function (k) { k.insertPhysicalSymbol("factorial"); },
     "%": function (k) { k.insertPhysicalSymbol("percent"); },
     "π": function (k) { k.insertConstant("pi", "\\pi "); },
+    "ⅈ": function (k) { k.insertConstant("i", "i"); },          // the imaginary unit (a plain i is a variable)
     "√": function (k) { k.insertSqrt(); },
     "ⁿ√": function (k) { k.insertNthRoot(); },
     "abs": function (k) { k.insertAbsolute(); },

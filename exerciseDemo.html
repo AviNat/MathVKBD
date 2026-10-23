@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Avi Nathan. All rights reserved.
+  No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+-->
+<!--
+  A MINIMAL EXERCISE PAGE - the reference for integrating the math keyboard and the checker into a learning system.
+  Everything a real exercise needs, nothing else: the task, the keyboard, Submit, the grade and the feedback.
+
+  The page needs 3 scripts (host your own copies in production):
+    1. MathJax 3 - the keyboard and the feedback draw math with it (the [tex]/html extension is required)
+    2. fullKbdLib-v4.js - the keyboard        (MoodleMathKeyboard)
+    3. mathCheck.js     - the checker         (MathCheck)
+  The exercise itself is data (EXERCISE below), in the format the playground saves ("Exercise file" tab).
+-->
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תרגיל</title>
+
+<script>
+window.MathJax = {
+    loader: { load: ["[tex]/html"] },
+    tex: { packages: { "[+]": ["html"] }, inlineMath: [["\\(", "\\)"]] },
+    svg: { fontCache: "global" }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script src="https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js"></script>
+<script src="https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js"></script>
+
+<style>
+body { font: 17px/1.6 "Segoe UI", Arial, sans-serif; color: #1d2733; background: #f4f6f9; margin: 0; padding: 16px; }
+.exercise { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #d5dce4; border-radius: 12px; padding: 18px 20px; }
+.task { margin: 0 0 14px; }
+.math { unicode-bidi: isolate; direction: ltr; display: inline-block; }   /* math left to right inside Hebrew */
+#answer { direction: ltr; margin-bottom: 12px; }                          /* the keyboard is left to right */
+#submit { font: inherit; font-weight: 600; padding: 7px 24px; border: none; border-radius: 8px; background: #1f5f99; color: #fff; cursor: pointer; }
+#result { margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: #f8fafc; border: 1px solid #d5dce4; }
+#grade { font-size: 24px; font-weight: 700; }
+#feedback { white-space: pre-wrap; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div class="exercise">
+  <!-- the task, for the student -->
+  <p class="task">
+    מחיר ק"ג תפוחים 3.4 ש"ח, ומחיר ק"ג תפוזים 2.8 ש"ח.<br>
+    קניתי <span class="math">\(x\)</span> ק"ג תפוחים ו-<span class="math">\(y\)</span> ק"ג תפוזים ושילמתי 13 ש"ח.<br>
+    רשמו משוואה.
+  </p>
+
+  <!-- the answer field: the keyboard builds itself in this div -->
+  <div id="answer"></div>
+
+  <button type="button" id="submit">בדיקה</button>
+
+  <!-- the grade and the feedback (hidden until the first Submit) -->
+  <div id="result" hidden>
+    <div id="grade"></div>
+    <div id="feedback"></div>
+  </div>
+</div>
+
+<script>
+/*
+ * THE EXERCISE - data, as saved by the playground (mathCheckPlayground.html, tab "3. Exercise file").
+ * A learning system stores this with the question and gives it to the page.
+ */
+const EXERCISE = {
+    language: "he",                                   // the language of the feedback and the keyboard's tooltips
+    keyboard: {                                       // what the student's keyboard offers
+        language: "he",
+        variables: [{ id: "x", label: "x", latex: "x" }, { id: "y", label: "y", latex: "y" }],
+        enableEquals: true,
+        complexNumbers: false,
+        sets: false,
+        functions: {},
+        structures: {},
+        symbols: {},
+        multiplicationSymbol: "cdot"
+    },
+    reference: {                                      // the reference answer: 3.4x + 2.8y = 13 (the keyboard's semantic AST)
+        type: "chain", elements: [
+            { type: "operation", op: "+", operands: [
+                { type: "operation", op: "*", operands: [{ type: "number", value: "3.4" }, { type: "variable", name: "x" }] },
+                { type: "operation", op: "*", operands: [{ type: "number", value: "2.8" }, { type: "variable", name: "y" }] }] },
+            { type: "number", value: "13" }]
+    },
+    referenceUnit: null,                              // e.g. "km" when the answer has a unit
+    rules: {},                                        // only what differs from MathCheck's defaults
+    rubric: null                                      // null: MathCheck's default rubric
+};
+
+/* 1. the keyboard, in the answer field */
+const keyboard = new MoodleMathKeyboard(Object.assign({}, EXERCISE.keyboard, { divId: "answer" }));
+
+/* 2. Submit: check the answer, show the grade and the feedback - the student may change the answer and submit again */
+document.getElementById("submit").addEventListener("click", function () {
+    /* the student's answer: the semantic AST (plus the unit, when the exercise has one) */
+    const answer = EXERCISE.referenceUnit
+        ? { answer: keyboard.getAST(), unit: keyboard.getUnit() || null }
+        : keyboard.getAST();
+    const reference = EXERCISE.referenceUnit
+        ? { answer: EXERCISE.reference, unit: EXERCISE.referenceUnit }
+        : EXERCISE.reference;
+
+    const result = MathCheck.compare(answer, reference, EXERCISE.rules, EXERCISE.rubric, { language: EXERCISE.language });
+    // result.grade    - 0..100
+    // result.correct  - true when there is no error (notes are allowed)
+    // result.feedback - text with \( \) LaTeX; result.items - the errors and notes one by one
+
+    showResult(result);
+    saveToLearningSystem(answer, keyboard.getLatex(), result);
+});
+
+function showResult(result) {
+    document.getElementById("grade").textContent = result.grade + "%";
+    document.getElementById("feedback").textContent = result.feedback;
+    document.getElementById("result").hidden = false;
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([document.getElementById("feedback")]);
+}
+
+/*
+ * 3. THE LEARNING SYSTEM - replace with the system's own call: store the answer (the AST as JSON, the LaTeX to show
+ * it again) and the grade. On a server, the same check runs on Node: MathCheck.compare(answer, reference, ...).
+ */
+function saveToLearningSystem(answer, latex, result) {
+    console.log("answer:", JSON.stringify(answer), "latex:", latex, "grade:", result.grade);
+}
+</script>
+</body>
+</html>

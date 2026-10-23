@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Avi Nathan. All rights reserved.
+ * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+ */
+/*
  * mathCheck - compares a student's answer with a reference answer and grades it.
  * Design: CHECKING-API-DESIGN.md (API, rules, rubric) and ANSWER-CHECKING-DESIGN.md (the math tree, strategies).
  *
@@ -19,7 +23,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "0.3.0";
+const VERSION = "0.5.0";
 
 /* ============================================================
    DEFAULTS
@@ -60,6 +64,10 @@ const DEFAULT_RULES = {
         decimals: null,                  // { exactly | min | max: n }
         closeButWrong: 0                 // percent: outside the tolerance but within it -> "rounding"
     },
+    units: {
+        otherUnits: true,                // 2000 m for 2 km: true accepted, "note" accepted with a note, false an error
+        strict: false                    // true: only the reference's unit (as otherUnits: false); a unit error fatal: rubric.fatal "units"
+    },
     diagnosis: true,
     mistakes: [],
     feedback: {
@@ -84,6 +92,7 @@ const DEFAULT_RUBRIC = {
         precision: { mode: "once", points: 10 },
         derivation: { mode: "once", points: 20 },
         domain: { mode: "once", points: 30 },
+        units: { mode: "once", points: 30 },
         mistake: { mode: "once", points: 100 }
     }
 };
@@ -95,6 +104,9 @@ const CATEGORY_OF = {
     "wrong-value": "value",
     "not-evaluated": "value",
     "domain-only": "domain",
+    "missing-unit": "units",
+    "wrong-unit": "units",
+    "unit-not-accepted": "units",
     "sign-error": "sign",
     "missing-factor": "factor",
     "scale-error": "scale",
@@ -107,6 +119,8 @@ const CATEGORY_OF = {
     "not-fully-factored": "form",
     "negative-exponent": "form",
     "irrational-denominator": "form",
+    "complex-denominator": "form",
+    "root-of-negative": "form",
     "not-exact": "form",
     "not-isolated": "form",
     "not-equivalent-form": "form",
@@ -128,7 +142,7 @@ const CATEGORY_OF = {
 /* the diagnosis categories: graded through "value" until the rubric sets them (CHECKING-API-DESIGN 9.2) */
 const DIAGNOSIS_CATEGORIES = ["sign", "factor", "scale", "term"];
 /* categories that cost points even when the teacher's rubric does not list them */
-const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 } };
+const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 }, units: { mode: "once", points: 30 } };
 
 /* ============================================================
    SMALL HELPERS
@@ -412,6 +426,71 @@ function usesPlusMinus(node) {
 }
 
 /* ============================================================
+   COMPLEX NUMBERS - an answer with i is computed as { re, im } (the variables stay real)
+   ============================================================ */
+function usesI(node) {
+    let found = false;
+    walk(node, function (n) { if (n.type === "constant" && n.name === "i") found = true; });
+    return found;
+}
+const C = {
+    of: function (re, im) { return { re: re, im: im || 0 }; },
+    add: function (a, b) { return C.of(a.re + b.re, a.im + b.im); },
+    mul: function (a, b) { return C.of(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re); },
+    div: function (a, b) {
+        const d = b.re * b.re + b.im * b.im;
+        return C.of((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d);
+    },
+    abs: function (a) { return Math.hypot(a.re, a.im); },
+    /* the principal value: exp(e · log b); an integer exponent by multiplying (exact for (3+4i)⁻¹) */
+    pow: function (b, e) {
+        if (e.im === 0 && Number.isInteger(e.re) && Math.abs(e.re) <= 64) {
+            let r = C.of(1, 0);
+            for (let k = 0; k < Math.abs(e.re); k += 1) r = C.mul(r, b);
+            return e.re < 0 ? C.div(C.of(1, 0), r) : r;
+        }
+        if (b.re === 0 && b.im === 0) return C.of(0, 0);
+        const logR = Math.log(C.abs(b)), arg = Math.atan2(b.im, b.re);
+        const re = e.re * logR - e.im * arg, im = e.re * arg + e.im * logR;
+        return C.of(Math.exp(re) * Math.cos(im), Math.exp(re) * Math.sin(im));
+    }
+};
+function cEvaluate(node, env) {
+    /* without i: the real value - unless it has none (√−4 = 2i, (−8)^½): then computed as complex */
+    if (!usesI(node)) {
+        const v = evaluate(node, env);
+        if (isFinite(v) || ["operation", "function", "nthRoot", "simpleFraction"].indexOf(node.type) < 0) return C.of(v, 0);
+    }
+    const ce = function (n) { return cEvaluate(n, env); };
+    switch (node.type) {
+        case "constant": return C.of(0, 1);                                  // i (π and e have no i)
+        case "operation": {
+            const o = node.operands;
+            switch (node.op) {
+                case "+": return o.reduce(function (a, x) { return C.add(a, ce(x)); }, C.of(0, 0));
+                case "*": return o.reduce(function (a, x) { return C.mul(a, ce(x)); }, C.of(1, 0));
+                case "neg": { const a = ce(o[0]); return C.of(-a.re, -a.im); }
+                case "/": return C.div(ce(o[0]), ce(o[1]));
+                case "^": return C.pow(ce(o[0]), ce(o[1]));
+            }
+            throw new Unsupported("operation " + node.op + " with i");
+        }
+        case "simpleFraction": return C.div(ce(node.numerator), ce(node.denominator));
+        case "conjugate": { const a = ce(node.argument); return C.of(a.re, -a.im); }
+        case "function": {
+            const a = ce(node.argument);
+            if (node.name === "sqrt") return C.pow(a, C.of(0.5, 0));
+            if (node.name === "abs") return C.of(C.abs(a), 0);
+            /* other functions only of a real value */
+            if (Math.abs(a.im) < 1e-12) return C.of(evaluate({ type: "function", name: node.name, base: node.base, argument: { type: "number", value: String(a.re) } }, env), 0);
+            throw new Unsupported("function " + node.name + " of a complex number");
+        }
+        case "nthRoot": return C.pow(ce(node.content), C.div(C.of(1, 0), ce(node.index)));
+    }
+    throw new Unsupported(node.type + " with i");
+}
+
+/* ============================================================
    SAMPLING
    ============================================================ */
 /*
@@ -460,6 +539,9 @@ function sampleValues(exprs, ctx) {
     const vars = [];
     exprs.forEach(function (e) { collectVariables(e, vars); });
     const pm = exprs.some(usesPlusMinus);
+    /* an answer with i: each value is [real part, imaginary part], compared part by part (not as a ± set) */
+    const complex = exprs.some(usesI);
+    if (complex && pm) return { ok: false, unsupported: "± with i", rows: [] };
     const signs = pm ? [1, -1] : [1];
     const want = Math.max(3, ctx.rules.value.samples || 8);
     const envs = ctx.sample(vars, want * 4);
@@ -468,10 +550,11 @@ function sampleValues(exprs, ctx) {
         for (let i = 0; i < envs.length && rows.length < want; i += 1) {
             const env = envs[i];
             const values = exprs.map(function (e) {
+                if (complex) { env.s = 1; const c = cEvaluate(e, env); return [c.re, c.im]; }
                 return signs.map(function (s) { env.s = s; return evaluate(e, env); });
             });
             if (values[0].some(function (v) { return !isFinite(v); })) continue;
-            rows.push({ env: { vars: env.vars }, values: values });
+            rows.push({ env: { vars: env.vars }, values: values, complex: complex });
         }
     } catch (e) {
         if (e instanceof Unsupported) return { ok: false, unsupported: e.what, rows: [] };
@@ -483,6 +566,8 @@ function sampleValues(exprs, ctx) {
 /* equal values at every point (± : the two values as a set) */
 function rowsEqual(rows, i, j, tol) {
     return rows.every(function (row) {
+        /* complex: the real parts, then the imaginary parts */
+        if (row.complex) return closeTo(row.values[i][0], row.values[j][0], tol) && closeTo(row.values[i][1], row.values[j][1], tol);
         const a = row.values[i].slice().sort(function (x, y) { return x - y; });
         const b = row.values[j].slice().sort(function (x, y) { return x - y; });
         return a.every(function (v, k) { return closeTo(v, b[k], tol); });
@@ -493,7 +578,15 @@ function rowsEqual(rows, i, j, tol) {
 function constantRatio(rows, i, j, tol) {
     let k = null;
     for (const row of rows) {
-        const a = row.values[i][0], b = row.values[j][0];
+        let a = row.values[i][0], b = row.values[j][0];
+        if (row.complex) {
+            /* a real ratio of two complex values (−(1+2i) is −1 · (1+2i)); a complex ratio is no ratio here */
+            const za = C.of(row.values[i][0], row.values[i][1]), zb = C.of(row.values[j][0], row.values[j][1]);
+            if (C.abs(zb) < 1e-12) { if (C.abs(za) < 1e-9) continue; return null; }
+            const r = C.div(za, zb);
+            if (Math.abs(r.im) > 1e-9 * Math.max(1, Math.abs(r.re))) return null;
+            a = r.re; b = 1;
+        }
         if (Math.abs(b) < 1e-12) {
             if (Math.abs(a) < 1e-9) continue;
             return null;
@@ -971,6 +1064,13 @@ const TEXT = {
         "wrong-value": "The value of the answer is not correct.",
         "not-evaluated": "Work out {what} in the answer and write the result.",
         "domain-only": "The equation is equivalent to the expected one only when \\({condition}\\).",
+        "missing-unit": "The unit is missing.",
+        "wrong-unit": "The unit \\({unit}\\) is not a unit of {kind}.",
+        "unit-not-accepted": "Write the answer in \\({unit}\\).",
+        "note-other-unit": "Accepted: the answer in another unit (\\({unit}\\)).",
+        "unitkind-length": "length", "unitkind-area": "area", "unitkind-volume": "volume", "unitkind-time": "time",
+        "unitkind-speed": "speed", "unitkind-acceleration": "acceleration", "unitkind-mass": "mass",
+        "cat-units": "Units",
         "op-derivative": "the derivative", "op-integral": "the integral", "op-evaluation": "the evaluation between the bounds",
         "op-limit": "the limit", "op-sum": "the sum", "op-product": "the product",
         "sign-error": "The sign is wrong: the answer is the negative of the correct one.",
@@ -985,6 +1085,8 @@ const TEXT = {
         "not-fully-factored": "The factor \\({factor}\\) can be factored further.",
         "negative-exponent": "Write the answer without negative exponents.",
         "irrational-denominator": "Rationalize the denominator of \\({fraction}\\).",
+        "complex-denominator": "Write \\({fraction}\\) without i in the denominator, in the form a + bi.",
+        "root-of-negative": "Write \\({root}\\) with i (for example \\(\\sqrt{-4}=2i\\)).",
         "not-exact": "Give the exact value, not a decimal approximation.",
         "not-isolated": "Write the answer with \\({variable}\\) alone on one side.",
         "not-equivalent-form": "The value is right, but this form of the answer is not accepted here.",
@@ -1047,6 +1149,13 @@ const TEXT = {
         "wrong-value": "ערך התשובה אינו נכון.",
         "not-evaluated": "יש לחשב את {what} שבתשובה ולכתוב את התוצאה.",
         "domain-only": "המשוואה שקולה למשוואה הנדרשת רק כאשר \\({condition}\\).",
+        "missing-unit": "חסרה יחידת המידה.",
+        "wrong-unit": "היחידה \\({unit}\\) אינה יחידה של {kind}.",
+        "unit-not-accepted": "יש לכתוב את התשובה ב-\\({unit}\\).",
+        "note-other-unit": "התקבל: התשובה ביחידה אחרת (\\({unit}\\)).",
+        "unitkind-length": "אורך", "unitkind-area": "שטח", "unitkind-volume": "נפח", "unitkind-time": "זמן",
+        "unitkind-speed": "מהירות", "unitkind-acceleration": "תאוצה", "unitkind-mass": "מסה",
+        "cat-units": "יחידות",
         "op-derivative": "הנגזרת", "op-integral": "האינטגרל", "op-evaluation": "ההצבה בגבולות",
         "op-limit": "הגבול", "op-sum": "הסכום", "op-product": "המכפלה",
         "sign-error": "הסימן שגוי: התשובה היא הנגדית של התשובה הנכונה.",
@@ -1061,6 +1170,8 @@ const TEXT = {
         "not-fully-factored": "אפשר לפרק את הגורם \\({factor}\\) עוד.",
         "negative-exponent": "יש לכתוב את התשובה בלי חזקות שליליות.",
         "irrational-denominator": "יש לגרום למכנה של \\({fraction}\\) להיות רציונלי.",
+        "complex-denominator": "יש לכתוב את \\({fraction}\\) בלי i במכנה, בצורה a + bi.",
+        "root-of-negative": "יש לכתוב את \\({root}\\) בעזרת i (למשל \\(\\sqrt{-4}=2i\\)).",
         "not-exact": "יש לתת ערך מדויק, לא קירוב עשרוני.",
         "not-isolated": "יש לכתוב את התשובה כך ש־\\({variable}\\) לבד באגף אחד.",
         "not-equivalent-form": "הערך נכון, אך הצורה הזו של התשובה אינה מתקבלת כאן.",
@@ -1123,6 +1234,13 @@ const TEXT = {
         "wrong-value": "قيمة الإجابة غير صحيحة.",
         "not-evaluated": "احسب {what} في الإجابة واكتب النتيجة.",
         "domain-only": "المعادلة مكافئة للمعادلة المطلوبة فقط عندما \\({condition}\\).",
+        "missing-unit": "وحدة القياس ناقصة.",
+        "wrong-unit": "الوحدة \\({unit}\\) ليست وحدة {kind}.",
+        "unit-not-accepted": "اكتب الإجابة بوحدة \\({unit}\\).",
+        "note-other-unit": "مقبول: الإجابة بوحدة أخرى (\\({unit}\\)).",
+        "unitkind-length": "طول", "unitkind-area": "مساحة", "unitkind-volume": "حجم", "unitkind-time": "زمن",
+        "unitkind-speed": "سرعة", "unitkind-acceleration": "تسارع", "unitkind-mass": "كتلة",
+        "cat-units": "الوحدات",
         "op-derivative": "المشتقة", "op-integral": "التكامل", "op-evaluation": "التعويض بين الحدين",
         "op-limit": "النهاية", "op-sum": "المجموع", "op-product": "الجداء",
         "sign-error": "الإشارة خاطئة: الإجابة هي سالب الإجابة الصحيحة.",
@@ -1137,6 +1255,8 @@ const TEXT = {
         "not-fully-factored": "يمكن تحليل العامل \\({factor}\\) أكثر.",
         "negative-exponent": "اكتب الإجابة دون أسس سالبة.",
         "irrational-denominator": "اجعل مقام \\({fraction}\\) عددًا نسبيًا.",
+        "complex-denominator": "اكتب \\({fraction}\\) بدون i في المقام، بالصيغة a + bi.",
+        "root-of-negative": "اكتب \\({root}\\) باستخدام i (مثلًا \\(\\sqrt{-4}=2i\\)).",
         "not-exact": "أعطِ القيمة الدقيقة، لا تقريبًا عشريًا.",
         "not-isolated": "اكتب الإجابة بحيث يكون \\({variable}\\) وحده في طرف.",
         "not-equivalent-form": "القيمة صحيحة، لكن هذا الشكل من الإجابة غير مقبول هنا.",
@@ -1213,6 +1333,7 @@ function feedbackText(code, language, params, custom) {
         }
         if (k === "what" && typeof v === "string" && TEXT[lang]["op-" + v]) v = TEXT[lang]["op-" + v];
         if (k === "difference" && typeof v === "string") v = TEXT[lang][v] || TEXT.en[v] || v;
+        if (k === "kind" && typeof v === "string") v = TEXT[lang]["unitkind-" + v] || TEXT.en["unitkind-" + v] || v;
         text = text.split("{" + k + "}").join(String(v));
     });
     /* math and numbers left to right inside a right-to-left line (the chemistry keyboard's lesson) */
@@ -1350,11 +1471,69 @@ function runFormChecks(student, reference, rules, add) {
     }
 
     if (level("rationalDenominator")) {
+        /* a fraction with a root in its denominator: 1/√2 */
+        const denominatorOf = function (n) {
+            if (n.type === "operation" && n.op === "/") return n.operands[1];
+            if (n.type === "simpleFraction") return n.denominator;
+            return null;
+        };
+        /* a root of a fraction whose denominator is not a perfect power: √(1/2) is 1/√2 (√(1/4) = 1/2 is fine) */
+        const rootOfFraction = function (n) {
+            let content = null, index = null;
+            if (n.type === "function" && n.name === "sqrt") { content = n.argument; index = 2; }
+            if (n.type === "nthRoot") { content = n.content; index = intValue(n.index); }
+            if (!content || !denominatorOf(content)) return false;
+            const d = intValue(denominatorOf(content));
+            if (d === null || !index || index < 2) return true;
+            const root = Math.round(Math.pow(Math.abs(d), 1 / index));
+            return Math.pow(root, index) !== Math.abs(d);
+        };
         walk(student, function (n) {
-            if (n.type === "operation" && n.op === "/" && containsRoot(n.operands[1])) {
+            const den = denominatorOf(n);
+            if ((den && containsRoot(den)) || rootOfFraction(n)) {
                 add(level("rationalDenominator"), "irrational-denominator", { fraction: latex(n) }, [n]);
             }
         });
+    }
+
+    /* no i in a denominator: 1/(3+4i) or (3+4i)⁻¹ - written as a + bi (0.12 − 0.16i) instead */
+    if (level("realDenominator")) {
+        let found = null;
+        walk(student, function (n) {
+            if (found) return;
+            let den = null;
+            if (n.type === "operation" && n.op === "/") den = n.operands[1];
+            if (n.type === "simpleFraction") den = n.denominator;
+            if (den && usesI(den)) { found = n; return; }
+            if (n.type === "operation" && n.op === "^" && usesI(n.operands[0])) {
+                const e = n.operands[1];
+                const negative = e && ((e.type === "number" && Number(e.value) < 0) || (e.type === "operation" && e.op === "neg"));
+                if (negative) found = n;
+            }
+        });
+        if (found) add(level("realDenominator"), "complex-denominator", { fraction: latex(found) }, [found]);
+    }
+
+    /* a root of a negative number written with i: 2i, not √−4 (also ⁴√−16, (−4)^½) */
+    if (level("noRootOfNegative")) {
+        let found = null;
+        const negativeNumber = function (n) {
+            if (!n || hasVariable(n) || usesI(n)) return false;
+            let v;
+            try { v = evaluate(n, { vars: {}, s: 1 }); } catch (e) { return false; }
+            return isFinite(v) && v < 0;
+        };
+        walk(student, function (n) {
+            if (found) return;
+            if (n.type === "function" && n.name === "sqrt" && negativeNumber(n.argument)) found = n;
+            if (n.type === "nthRoot" && intValue(n.index) !== null && intValue(n.index) % 2 === 0 && negativeNumber(n.content)) found = n;
+            if (n.type === "operation" && n.op === "^" && negativeNumber(n.operands[0])) {
+                let e;
+                try { e = evaluate(n.operands[1], { vars: {}, s: 1 }); } catch (err) { e = NaN; }
+                if (isFinite(e) && !Number.isInteger(e)) found = n;
+            }
+        });
+        if (found) add(level("noRootOfNegative"), "root-of-negative", { root: latex(found) }, [found]);
     }
 
     if (level("exactValue")) {
@@ -1656,6 +1835,48 @@ function formDifference(s, r, rules) {
     return TEXT.en["diff-" + name] ? { difference: "diff-" + name } : {};
 }
 
+/*
+ * UNITS - the units of the keyboard (fullKbdLib-v4 UNIT_GROUPS): kind and the factor to the base unit.
+ * A unit is given as its value ("km") or as { value, scale, kind } for a unit not in this table.
+ */
+const UNITS = {
+    "mm": { kind: "length", scale: 0.001 }, "cm": { kind: "length", scale: 0.01 }, "m": { kind: "length", scale: 1 }, "km": { kind: "length", scale: 1000 },
+    "cm^2": { kind: "area", scale: 1e-4 }, "m^2": { kind: "area", scale: 1 }, "km^2": { kind: "area", scale: 1e6 },
+    "cm^3": { kind: "volume", scale: 1e-6 }, "m^3": { kind: "volume", scale: 1 }, "L": { kind: "volume", scale: 0.001 },
+    "s": { kind: "time", scale: 1 }, "min": { kind: "time", scale: 60 }, "h": { kind: "time", scale: 3600 },
+    "m/s": { kind: "speed", scale: 1 }, "km/h": { kind: "speed", scale: 1000 / 3600 },
+    "m/s^2": { kind: "acceleration", scale: 1 },
+    "g": { kind: "mass", scale: 0.001 }, "kg": { kind: "mass", scale: 1 }
+};
+function unitInfo(u) {
+    if (!u) return null;
+    if (typeof u === "string") return Object.assign({ value: u, kind: null, scale: 1 }, UNITS[u] || {});
+    const known = UNITS[u.value] || {};
+    return { value: u.value, kind: u.kind || known.kind || null, scale: u.scale !== undefined ? u.scale : (known.scale !== undefined ? known.scale : 1) };
+}
+function unitLatex(value) { return "\\mathrm{" + String(value) + "}"; }
+
+/*
+ * The student's unit against the reference's: null when the reference has no unit (none was asked for).
+ * { items: [{ kind, code, params }], factor } - factor turns the student's number into the reference's unit.
+ */
+function compareUnits(studentUnit, referenceUnit, rules) {
+    const ru = unitInfo(referenceUnit);
+    if (!ru) return null;
+    const su = unitInfo(studentUnit);
+    if (!su) return { items: [{ kind: "error", code: "missing-unit", params: {} }], factor: 1 };
+    if (su.value === ru.value) return { items: [], factor: 1 };
+    if (!su.kind || !ru.kind || su.kind !== ru.kind) {
+        return { items: [{ kind: "error", code: "wrong-unit", params: { unit: unitLatex(su.value), kind: ru.kind || "?" } }], factor: 1 };
+    }
+    /* another unit of the same kind: 2000 m for 2 km */
+    /* strict: only the reference's unit */
+    const other = (rules.units || {}).strict === true ? false : (rules.units || {}).otherUnits;
+    const items = other === false ? [{ kind: "error", code: "unit-not-accepted", params: { unit: unitLatex(ru.value) } }]
+        : other === "note" ? [{ kind: "note", code: "note-other-unit", params: { unit: unitLatex(su.value) } }] : [];
+    return { items: items, factor: su.scale / ru.scale };
+}
+
 /* the first derivative / integral / limit / Σ / ∏ in the student's answer of a type the reference does not have */
 const OPERATION_TYPES = { derivative: true, integral: true, evaluation: true, limit: true, sum: true, product: true };
 function firstOperation(s, r) {
@@ -1740,6 +1961,14 @@ function compareOne(student, reference, rules, options, debug) {
     }
 
     if (refKind === "expression") {
+        /* units: missing, of another kind, or another unit of the same kind (converted to the reference's) */
+        const units = compareUnits(options.studentUnit, options.referenceUnit, rules);
+        if (units) {
+            units.items.forEach(function (it) { add(it.kind, it.code, it.params, [sAns]); });
+            if (units.factor !== 1) {
+                sAns = { type: "operation", op: "*", operands: [{ type: "number", value: String(units.factor) }, sAns] };
+            }
+        }
         const eq = expressionsEqual(sAns, r, ctx);
         state.equivalence = eq.step;
         if (debug) { debug.rows = eq.rows || []; debug.vars = eq.vars || []; debug.step = eq.step; debug.unsupported = eq.unsupported; }
@@ -2055,13 +2284,21 @@ function compare(student, reference, rules, rubric, options) {
     if (rubric && rubric.categories) B.categories = clone(rubric.categories);
     const language = options.language || "en";
 
-    const s = parseInput(student);
-    const refs = Array.isArray(reference) ? reference.map(parseInput) : [parseInput(reference)];
+    /* an answer with its unit: { answer: ast, unit: "km" } (the keyboard keeps the unit apart: getUnit()) */
+    const unwrap = function (x) {
+        const v = parseInput(x);
+        if (v && typeof v === "object" && v.answer !== undefined && v.type === undefined) return { ast: parseInput(v.answer), unit: v.unit || null };
+        return { ast: v, unit: null };
+    };
+    const su = unwrap(student);
+    const s = su.ast;
+    const refs = (Array.isArray(reference) ? reference : [reference]).map(unwrap);
 
     let best = null;
-    refs.forEach(function (ref, index) {
+    refs.forEach(function (refWithUnit, index) {
+        const ref = refWithUnit.ast;
         const debug = options.debug ? {} : null;
-        const raw = compareOne(s, ref, R, options, debug);
+        const raw = compareOne(s, ref, R, Object.assign({}, options, { studentUnit: su.unit, referenceUnit: refWithUnit.unit }), debug);
         const graded = applyRubric(raw, B);
         if (!best || graded.grade > best.graded.grade) best = { raw: raw, graded: graded, index: index, debug: debug, ref: ref };
     });

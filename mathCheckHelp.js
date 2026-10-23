@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Avi Nathan. All rights reserved.
+ * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+ */
+/*
  * mathCheck - help for the comparison rules and the rubric (data only; not part of the library).
  *
  * One entry per rule / rubric element, keyed by its path in the rules or rubric object ("equivalence.vectorReversal",
@@ -210,6 +214,24 @@ const SECTIONS = [
             ]
         },
         {
+            id: "form.realDenominator", path: "rules.form.realDenominator", values: "off | \"note\" | \"error\"",
+            text: { en: "No i in a denominator - a complex number written as a + bi: 0.12 − 0.16i, not 1/(3 + 4i) or (3 + 4i)⁻¹. Answers with i are computed as complex numbers, so these forms have the same value and are accepted; this check notes (or takes points for) the form." },
+            examples: [
+                { caption: "(3 + 4i)⁻¹ for 0.12 − 0.16i: the same value", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -1)", expect: { grade: 100 } },
+                { caption: "the same, with the check as a note", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(^ (+ 3 (* 4 i)) -1)", rules: { form: { realDenominator: "note" } }, expect: { grade: 100, notes: ["complex-denominator"] } },
+                { caption: "1/(3 + 4i), the check as an error", ref: "(+ 0.12 (neg (* 0.16 i)))", student: "(/ 1 (+ 3 (* 4 i)))", rules: { form: { realDenominator: "error" } }, expect: { grade: 90, codes: ["complex-denominator"] } }
+            ]
+        },
+        {
+            id: "form.noRootOfNegative", path: "rules.form.noRootOfNegative", values: "off | \"note\" | \"error\"",
+            text: { en: "A root of a negative number written with i: 2i, not √−4 (also an even root such as ⁴√−16, or (−4)^½). Answers with i are computed as complex numbers, so √−4 has the value 2i and is accepted; this check requires the form with i. Odd roots (∛−8 = −2) are real and not flagged." },
+            examples: [
+                { caption: "√−4 for 2i: the same value", ref: "(* 2 i)", student: "sqrt((neg 4))", expect: { grade: 100 } },
+                { caption: "√−4 for 2i, the 2i form required", ref: "(* 2 i)", student: "sqrt((neg 4))", rules: { form: { noRootOfNegative: "error" } }, expect: { grade: 90, codes: ["root-of-negative"] } },
+                { caption: "3 + √−16 for 3 + 4i, as a note", ref: "(+ 3 (* 4 i))", student: "(+ 3 sqrt((neg 16)))", rules: { form: { noRootOfNegative: "note" } }, expect: { grade: 100, notes: ["root-of-negative"] } }
+            ]
+        },
+        {
             id: "form.exactValue", path: "rules.form.exactValue", values: "off | \"note\" | \"error\"",
             text: { en: "An exact answer, not a decimal: 1/2, not 0.5 (when the reference has no decimal number)." },
             examples: [
@@ -304,6 +326,34 @@ const SECTIONS = [
     ]
 },
 {
+    id: "units", title: { en: "Units" },
+    intro: { en: "When the reference answer has a unit, the student's unit is checked too. The keyboard keeps the unit apart from the expression (keyboard.getUnit()), so both answers are passed as { answer, unit }: compare({ answer: keyboard.getAST(), unit: keyboard.getUnit() }, { answer: reference, unit: \"km\" }, …). A missing unit or a unit of the wrong kind costs the points of the rubric category units; the number is still compared." },
+    items: [
+        {
+            id: "units.otherUnits", path: "rules.units.otherUnits", values: "true (default) | \"note\" | false",
+            text: { en: "Another unit of the same kind: 2000 m for 2 km. The number is converted to the reference's unit, so a right answer in another unit is right. true: accepted; \"note\": accepted with a note; false: the answer must be in the reference's unit (category units) - the same as units.strict." },
+            examples: [
+                { caption: "2 km for 2 km", ref: "2", refUnit: "km", student: "2", studentUnit: "km", expect: { grade: 100 } },
+                { caption: "2000 m for 2 km", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", expect: { grade: 100 } },
+                { caption: "2000 m for 2 km, with a note", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { otherUnits: "note" } }, expect: { grade: 100, notes: ["note-other-unit"] } },
+                { caption: "2000 m for 2 km, not accepted", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { otherUnits: false } }, expect: { grade: 70, codes: ["unit-not-accepted"] } },
+                { caption: "2 without a unit", ref: "2", refUnit: "km", student: "2", studentUnit: "", expect: { grade: 70, codes: ["missing-unit"] } },
+                { caption: "2 km/h for 2 km: not a unit of length", ref: "2", refUnit: "km", student: "2", studentUnit: "km/h", expect: { grade: 70, codes: ["wrong-unit"] } },
+                { caption: "2 m for 2 km: a wrong value", ref: "2", refUnit: "km", student: "2", studentUnit: "m", expect: { grade: 0 } }
+            ]
+        },
+        {
+            id: "units.strict", path: "rules.units.strict", values: "false (default) | true",
+            text: { en: "Strict unit checking: only the reference's unit is accepted (2000 m for 2 km: \"Write the answer in km\"); the same as units.otherUnits: false. How much a unit error costs is the rubric's: the category units (default 30), or 0 at once when \"units\" is in rubric.fatal." },
+            examples: [
+                { caption: "strict: 2000 m for 2 km", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { strict: true } }, expect: { grade: 70, codes: ["unit-not-accepted"] } },
+                { caption: "strict, and a unit error fatal", ref: "2", refUnit: "km", student: "2000", studentUnit: "m", rules: { units: { strict: true } }, rubric: { fatal: ["incomplete", "answerType", "units"] }, expect: { grade: 0, codes: ["unit-not-accepted"] } },
+                { caption: "a unit error fatal: no unit", ref: "2", refUnit: "km", student: "2", studentUnit: "", rubric: { fatal: ["incomplete", "answerType", "units"] }, expect: { grade: 0, codes: ["missing-unit"] } }
+            ]
+        }
+    ]
+},
+{
     id: "wrong", title: { en: "Wrong answers" },
     items: [
         {
@@ -347,8 +397,8 @@ const SECTIONS = [
         { id: "rubric.start", path: "rubric.start", values: "a number (default 100)", text: { en: "The grade before any deduction." } },
         { id: "rubric.minimum", path: "rubric.minimum", values: "a number (default 0)", text: { en: "The lowest grade after the deductions." } },
         {
-            id: "rubric.fatal", path: "rubric.fatal", values: "[\"incomplete\", \"answerType\"] (default)",
-            text: { en: "Errors that give 0 at once: incomplete - an empty place left in the answer; answerType - an answer of another kind." },
+            id: "rubric.fatal", path: "rubric.fatal", values: "[\"incomplete\", \"answerType\"] (default); also \"units\"",
+            text: { en: "Errors that give 0 at once: incomplete - an empty place left in the answer; answerType - an answer of another kind; units (if added) - any unit error (missing, of the wrong kind, another unit when strict)." },
             examples: [
                 { caption: "an expression for an equation", ref: "x ‖ 2", student: "2", expect: { grade: 0, codes: ["answer-type"] } }
             ]
@@ -382,6 +432,7 @@ const SECTIONS = [
         { id: "rubric.categories.precision", path: "rubric.categories.precision", values: "default once, 10", text: { en: "The wrong number of decimals (numbers.decimals) or a rounding error (numbers.closeButWrong)." } },
         { id: "rubric.categories.derivation", path: "rubric.categories.derivation", values: "default once, 20", text: { en: "A wrong step in a chain of steps (statements.derivation: allSteps)." } },
         { id: "rubric.categories.domain", path: "rubric.categories.domain", values: "default once, 30 (also when the rubric leaves it out)", text: { en: "An equation that is the same only inside the domain of statements.domain." } },
+        { id: "rubric.categories.units", path: "rubric.categories.units", values: "default once, 30 (also when the rubric leaves it out)", text: { en: "A missing unit, a unit of the wrong kind, or another unit when units.otherUnits is false." } },
         { id: "rubric.categories.mistake", path: "rubric.categories.mistake", values: "default once, 100", text: { en: "A teacher-defined mistake (rules.mistakes) without its own points." } },
         { id: "rubric.categories.sign", path: "rubric.categories.sign", values: "not set (graded as value)", text: { en: "Diagnosis: only the sign is wrong, −(x + 1) for x + 1. Set it to give partial credit." } },
         { id: "rubric.categories.factor", path: "rubric.categories.factor", values: "not set (graded as value)", text: { en: "Diagnosis: a missing factor, x for 2x." } },

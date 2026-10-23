@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Avi Nathan. All rights reserved.
+  No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -15,8 +19,11 @@ window.MathJax = {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 
-<!-- 2. The keyboard library, from GitHub -->
-<script src="https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js"></script>
+<!-- 2. The keyboard library and the checker (mathCheck): a copy next to this page, else the one on GitHub -->
+<script src="fullKbdLib-v4.js"></script>
+<script>window.MoodleMathKeyboard || document.write('<script src="https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js"><\/script>');</script>
+<script src="mathCheck.js"></script>
+<script>window.MathCheck || document.write('<script src="https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js"><\/script>');</script>
 
 <style>
 :root {
@@ -47,26 +54,44 @@ pre.code { margin: 0; background: var(--code-bg); color: var(--code-text); borde
 .copy-btn { position: absolute; top: 8px; right: 8px; font: 12px "Segoe UI", Arial, sans-serif; padding: 3px 10px;
             border: 1px solid #3a5372; border-radius: 6px; background: #1c3350; color: #e3ebf5; cursor: pointer; }
 .copy-btn:hover { background: #26446a; }
+.task { background: #fff8e6; border: 1px solid #f0d58a; border-radius: 8px; padding: 10px 14px; margin: 0 0 12px;
+        font-size: 16px; line-height: 1.9; }
+.task .m { unicode-bidi: isolate; direction: ltr; display: inline-block; }
+.out.reference { font: 16px "Segoe UI", Arial, sans-serif; }
+.hint-inline { color: var(--muted); font-size: 13px; }
+/* the check: Submit, then the grade and the feedback (submit again after any change) */
+.check-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.check-bar button.submit { font: inherit; font-weight: 600; padding: 6px 18px; border: none; border-radius: 8px;
+                           background: var(--accent); color: #fff; cursor: pointer; }
+.check-bar button.submit:hover { background: #174b7a; }
+.check-bar .again { color: var(--muted); font-size: 12px; }
+.result { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 6px; background: #f8fafc; }
+.result .grade { font-size: 22px; font-weight: 700; }
+.result .grade.ok { color: var(--ok); } .result .grade.part { color: var(--warn); } .result .grade.bad { color: #b42318; }
+.result .fb { white-space: pre-wrap; font-size: 14px; margin-top: 2px; }
+.result .when { color: var(--muted); font-size: 11px; }
 details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 8px; }
 code { font-family: Consolas, monospace; background: #eef3f8; padding: 0 4px; border-radius: 4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>MathKeyboard - three examples</h1>
-  <p>Each keyboard is configured for one kind of answer. Click a keyboard to type into it with the computer keyboard
-     too, or open its on-screen keyboard with the keyboard button. Next to each one: the code that creates it; below
-     it, what it gives back (LaTeX and the semantic AST).</p>
+  <h1>MathKeyboard - examples</h1>
+  <p>Each example is a small exercise: a question, a keyboard configured for its kind of answer, and a Submit button
+     that checks the answer with mathCheck and shows the grade and the feedback - change the answer and submit again
+     as often as you like. Click a keyboard to type into it with the computer keyboard too. Next to each one: the code.</p>
 </header>
 
 <main>
   <section class="card">
     <h2>1. Numbers only</h2>
     <p class="what">A numeric answer: digits, operations, fractions, powers, roots and π - no variables, no "=",
-       no functions or structures.</p>
+       no functions or structures. The check notes a root left in the denominator.</p>
+    <div class="task">Write the square root of one half.</div>
     <div class="row">
       <div>
         <div id="kbdNumeric" class="kbd-host"></div>
+        <div class="check-bar" data-ex="Numeric"></div>
         <div class="label">LaTeX</div><div class="out" id="latexNumeric"></div>
         <details><summary>Semantic AST</summary><div class="out" id="astNumeric"></div></details>
       </div>
@@ -77,9 +102,12 @@ code { font-family: Consolas, monospace; background: #eef3f8; padding: 0 4px; bo
   <section class="card">
     <h2>2. Algebraic expressions in x and y</h2>
     <p class="what">An expression with the variables x and y (and the common functions) - no "=".</p>
+    <div class="task">The height of a cylinder is <span class="m">\(x\)</span> and its radius is <span class="m">\(y\)</span>.
+      Write an expression for the volume of the cylinder.</div>
     <div class="row">
       <div>
         <div id="kbdAlgebra" class="kbd-host"></div>
+        <div class="check-bar" data-ex="Algebra"></div>
         <div class="label">LaTeX</div><div class="out" id="latexAlgebra"></div>
         <details><summary>Semantic AST</summary><div class="out" id="astAlgebra"></div></details>
       </div>
@@ -89,15 +117,82 @@ code { font-family: Consolas, monospace; background: #eef3f8; padding: 0 4px; bo
 
   <section class="card">
     <h2>3. An equation (a single "=")</h2>
-    <p class="what">An equation in x and y: the "=" key is on, and the page allows it only once.</p>
+    <p class="what">An equation in x and y: the "=" key is on, and the page allows it only once. A task in Hebrew.</p>
+    <div class="task" dir="rtl" lang="he">
+      מחיר ק"ג תפוחים 3.4 ש"ח, ומחיר ק"ג תפוזים 2.8 ש"ח.<br>
+      קניתי <span class="m">\(x\)</span> ק"ג תפוחים ו-<span class="m">\(y\)</span> ק"ג תפוזים ושילמתי 13 ש"ח.<br>
+      רשמו משוואה.
+    </div>
     <div class="row">
       <div>
         <div id="kbdEquation" class="kbd-host"></div>
         <div class="status" id="statusEquation"></div>
+        <div class="check-bar" data-ex="Equation"></div>
         <div class="label">LaTeX</div><div class="out" id="latexEquation"></div>
         <details><summary>Semantic AST</summary><div class="out" id="astEquation"></div></details>
       </div>
       <div><div class="label">Code</div><pre class="code" id="codeEquation"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4. An exercise: defining a function (Hebrew)</h2>
+    <p class="what">A task in Hebrew. The student defines g with the named-function key: type <b>g</b>, then press
+       <b>f( )</b> - the g becomes the function's name - and the argument x. One "=" only.</p>
+    <div class="task" dir="rtl" lang="he">
+      נתונה הפונקציה <span class="m">\(f(x) = x^2\)</span>.<br>
+      הגדירו פונקציה <span class="m">\(g(x)\)</span> שהיא הזזה שמאלה ב-4 יחידות של הפונקציה <span class="m">\(f\)</span>.
+    </div>
+    <div class="row">
+      <div>
+        <div id="kbdFunction" class="kbd-host"></div>
+        <div class="status" id="statusFunction"></div>
+        <div class="check-bar" data-ex="Function"></div>
+        <div class="label">LaTeX</div><div class="out" id="latexFunction"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astFunction"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeFunction"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>5. An exercise with units (Hebrew)</h2>
+    <p class="what">A numeric answer with its unit. The student types the number and chooses the unit with the units
+       key <b>[u]</b>. The unit is not part of <code>getLatex()</code> / <code>getAST()</code>: the page reads it with
+       <code>getUnit()</code> and <code>getUnitScale()</code> (the factor to the base unit: km → 1000 m).</p>
+    <div class="task" dir="rtl" lang="he">
+      רוכב אופניים נוסע במהירות 12 קמ"ש במשך 10 דקות. מהו המרחק שעבר? ציינו גם יחידות.
+    </div>
+    <div class="row">
+      <div>
+        <div id="kbdUnits" class="kbd-host"></div>
+        <div class="status" id="statusUnits"></div>
+        <div class="check-bar" data-ex="Units"></div>
+        <div class="label">LaTeX (the number)</div><div class="out" id="latexUnits"></div>
+        <div class="label">Unit</div><div class="out" id="unitUnits"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astUnits"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeUnits"></pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>6. Complex numbers (Hebrew)</h2>
+    <p class="what">The keyboard with <b>i</b> (<code>complexNumbers: true</code>; in the <b>x…</b> panel, or the
+       letter i on the computer keyboard). Answers with i are computed as complex numbers, so (3+4i)⁻¹ and
+       0.12 − 0.16i have the same value; the rules require the form a + bi and the rubric takes 20% for i left in
+       the denominator.</p>
+    <div class="task" dir="rtl" lang="he">
+      כתבו את המספר <span class="m">\((3+4i)^{-1}\)</span> בצורה <span class="m">\(a+bi\)</span>.
+    </div>
+    <div class="row">
+      <div>
+        <div id="kbdComplex" class="kbd-host"></div>
+        <div class="check-bar" data-ex="Complex"></div>
+        <div class="label">LaTeX</div><div class="out" id="latexComplex"></div>
+        <details><summary>Semantic AST</summary><div class="out" id="astComplex"></div></details>
+      </div>
+      <div><div class="label">Code</div><pre class="code" id="codeComplex"></pre></div>
     </div>
   </section>
 
@@ -138,6 +233,7 @@ const ALGEBRA = {
 };
 
 const EQUATION = {
+    language: "he",             // the task is in Hebrew: the tooltips too
     variables: [
         { id: "x", label: "x", latex: "x" },
         { id: "y", label: "y", latex: "y" }
@@ -151,18 +247,61 @@ const EQUATION = {
     multiplicationSymbol: "cdot"
 };
 
+const FUNCTION = {
+    language: "he",             // the tooltips in Hebrew, like the task
+    variables: [
+        { id: "x", label: "x", latex: "x" },
+        { id: "g", label: "g", latex: "g" }   // the name of the function to define
+    ],
+    enableEquals: true,         // g(x) = ... (one "=": see below)
+    complexNumbers: false,
+    sets: false,
+    functions: { namedFunction: true },       // the f( ) key: g, then f( ) -> g( )
+    structures: {},
+    symbols: {},
+    multiplicationSymbol: "cdot"
+};
+
+const UNITS = {
+    language: "he",
+    variables: [],              // a number only
+    enableEquals: false,
+    complexNumbers: false,
+    sets: false,
+    functions: {},
+    structures: {},
+    symbols: {},
+    withUnits: true,            // the units key [u]
+    unitCategories: { length: true, time: true, speed: true },   // the student has to choose the right kind
+    multiplicationSymbol: "cdot"
+};
+
+const COMPLEX = {
+    language: "he",
+    variables: [],              // numbers and i only
+    enableEquals: false,
+    complexNumbers: true,       // i (and the conjugate) - typed i is the imaginary unit too
+    sets: false,
+    functions: {},
+    structures: {},
+    symbols: {},
+    multiplicationSymbol: "cdot"
+};
+
 /* ---------- creating a keyboard ---------- */
 const $ = function (id) { return document.getElementById(id); };
 const keyboards = [];
 
 function create(hostId, config, outId) {
-    const keyboard = new MoodleMathKeyboard(Object.assign({}, config, {
+    let keyboard = null;                  // known in onChange after the keyboard is made
+    keyboard = new MoodleMathKeyboard(Object.assign({}, config, {
         divId: hostId,
         physicalKeyboard: false,          // several keyboards on the page: see the last section
         onChange: function (value) {      // value.latex, value.ast (semantic), value.editorAST
             $("latex" + outId).textContent = value.latex;
             $("ast" + outId).textContent = JSON.stringify(stripIds(value.ast), null, 1);
-            if (outId === "Equation") showEquationStatus(value.ast);
+            if (outId === "Equation" || outId === "Function") showEquationStatus(value.ast, "status" + outId);
+            if (outId === "Units" && keyboard) showUnitStatus(keyboard, value.ast);
         }
     }));
     $(hostId).addEventListener("mousedown", function () { setActive(keyboard); });
@@ -178,18 +317,23 @@ function stripIds(ast) {
 const numericKbd = create("kbdNumeric", NUMERIC, "Numeric");
 const algebraKbd = create("kbdAlgebra", ALGEBRA, "Algebra");
 const equationKbd = create("kbdEquation", EQUATION, "Equation");
+const functionKbd = create("kbdFunction", FUNCTION, "Function");
 
-/* ---------- one "=" only: the equation keyboard ignores a second "=" (button and computer key) ---------- */
-const insertEquals = equationKbd.insertEquals;
-equationKbd.insertEquals = function () {
-    if (this.getAST().elements.length >= 2) return;   // the answer already has its "="
-    insertEquals.call(this);
-};
+/* ---------- one "=" only: the keyboard ignores a second "=" (button and computer key) ---------- */
+function oneEquals(keyboard) {
+    const insertEquals = keyboard.insertEquals;
+    keyboard.insertEquals = function () {
+        if (this.getAST().elements.length >= 2) return;   // the answer already has its "="
+        insertEquals.call(this);
+    };
+}
+oneEquals(equationKbd);
+oneEquals(functionKbd);
 
 /* the answer is a chain: one element - an expression; two - left = right */
 function isEmpty(node) { return !node || node.type === "missing" || node.type === "placeholder"; }
-function showEquationStatus(ast) {
-    const status = $("statusEquation");
+function showEquationStatus(ast, statusId) {
+    const status = $(statusId || "statusEquation");
     const parts = ast.elements;
     if (parts.length === 2 && !isEmpty(parts[0]) && !isEmpty(parts[1])) {
         status.textContent = "✓ An equation: left side = right side.";
@@ -203,6 +347,118 @@ function showEquationStatus(ast) {
     }
 }
 showEquationStatus(equationKbd.getAST());
+showEquationStatus(functionKbd.getAST(), "statusFunction");
+
+/* ---------- a number with its unit: the unit is read from the keyboard, not from the AST ---------- */
+const unitsKbd = create("kbdUnits", UNITS, "Units");
+const complexKbd = create("kbdComplex", COMPLEX, "Complex");
+function showUnitStatus(keyboard, ast) {
+    const unit = keyboard.getUnit(), scale = keyboard.getUnitScale();
+    const answer = ast.elements.length === 1 ? ast.elements[0] : null;
+    const number = answer && answer.type === "number" ? Number(answer.value) : null;
+    $("unitUnits").textContent = unit ? unit + "   (getUnitScale() = " + scale + ")" : "(no unit chosen)";
+    const status = $("statusUnits");
+    if (number === null) {
+        status.textContent = "Type the number.";
+        status.className = "status warn";
+    } else if (!unit) {
+        status.textContent = "A number without a unit: choose the unit with [u].";
+        status.className = "status warn";
+    } else {
+        status.textContent = "✓ " + number + " " + unit + " = " + (Math.round(number * scale * 1e9) / 1e9) + " in base units";
+        status.className = "status ok";
+    }
+}
+showUnitStatus(unitsKbd, unitsKbd.getAST());
+
+/* ============================================================
+   THE CHECK - each exercise: the reference answer (the keyboard's semantic AST), the rules, the feedback
+   language. Submit compares the keyboard's answer with MathCheck.compare; submit again after any change.
+   ============================================================ */
+const N = function (v) { return { type: "number", value: String(v) }; };
+const V = function (name) { return { type: "variable", name: name }; };
+const OP = function (op) { return { type: "operation", op: op, operands: Array.prototype.slice.call(arguments, 1) }; };
+const ANSWER = function () { return { type: "chain", elements: Array.prototype.slice.call(arguments) }; };
+
+const EXERCISES = {
+    Numeric: {
+        keyboard: numericKbd, language: "en",
+        reference: ANSWER(OP("/", { type: "function", name: "sqrt", argument: N(2) }, N(2))),          // √2 / 2
+        rules: { form: { rationalDenominator: "note" } }                                               // 1/√2: a note
+    },
+    Algebra: {
+        keyboard: algebraKbd, language: "en",
+        reference: ANSWER(OP("*", { type: "constant", name: "pi" }, OP("^", V("y"), N(2)), V("x"))),    // π·y²·x
+        rules: {}
+    },
+    Equation: {
+        keyboard: equationKbd, language: "he",
+        reference: ANSWER(OP("+", OP("*", N(3.4), V("x")), OP("*", N(2.8), V("y"))), N(13)),          // 3.4x + 2.8y = 13
+        rules: {}
+    },
+    Function: {
+        keyboard: functionKbd, language: "he",
+        reference: ANSWER({ type: "namedFunction", name: { type: "variableName", name: "g", subscript: null }, primeOrder: 0,
+            inverseFunction: false, superscript: null, argument: V("x") }, OP("^", OP("+", V("x"), N(4)), N(2))),  // g(x) = (x+4)²
+        rules: {}
+    },
+    Units: {
+        keyboard: unitsKbd, language: "he",
+        reference: ANSWER(N(2)), unit: "km",                                                           // 2 km
+        rules: { units: { otherUnits: "note" } }                                                      // 2000 m: accepted, noted
+    },
+    Complex: {
+        keyboard: complexKbd, language: "he",
+        reference: ANSWER(OP("+", N(0.12), OP("neg", OP("*", N(0.16), { type: "constant", name: "i" })))),   // 0.12 − 0.16i
+        rules: { form: { realDenominator: "error" } },                                                // i in a denominator: an error…
+        rubric: { categories: Object.assign({}, MathCheck.defaults.rubric.categories,
+            { form: { mode: "once", points: 20 } }) }                                                 // …that costs 20%
+    }
+};
+
+/* MathJax: one typesetting at a time (the keyboards typeset too) */
+let typesetChain = null;
+function typeset(el) {
+    if (!window.MathJax || !MathJax.typesetPromise) return;
+    typesetChain = (typesetChain || MathJax.startup.promise).then(function () { return MathJax.typesetPromise([el]); }).catch(function () {});
+}
+
+Object.keys(EXERCISES).forEach(function (id) {
+    const ex = EXERCISES[id];
+    const bar = document.querySelector(".check-bar[data-ex='" + id + "']");
+    const he = ex.language === "he";
+    bar.innerHTML = "<button type='button' class='submit'>" + (he ? "בדיקה · Submit" : "Submit") + "</button>" +
+        "<span class='again'>" + (he ? "אפשר לשנות את התשובה ולבדוק שוב" : "change the answer and submit again") + "</span>";
+    const result = document.createElement("div");
+    result.className = "result";
+    result.hidden = true;
+    result.innerHTML = "<div class='grade'></div><div class='fb'></div><div class='when'></div>";
+    bar.insertAdjacentElement("afterend", result);
+    /* the reference answer, built from the same data the check uses */
+    const refBox = document.createElement("details");
+    refBox.innerHTML = "<summary>Reference answer (for the teacher)</summary><div class='out reference'>\\(" +
+        MathCheck.latex(ex.reference) + (ex.unit ? "\\;\\mathrm{" + ex.unit + "}" : "") + "\\)</div>";
+    bar.parentNode.appendChild(refBox);
+
+    let attempts = 0;
+    bar.querySelector("button").addEventListener("click", function () {
+        const kbd = ex.keyboard;
+        const student = ex.unit !== undefined ? { answer: kbd.getAST(), unit: kbd.getUnit() || null } : kbd.getAST();
+        const reference = ex.unit !== undefined ? { answer: ex.reference, unit: ex.unit } : ex.reference;
+        const r = MathCheck.compare(student, reference, ex.rules, ex.rubric || null, { language: ex.language });
+        attempts += 1;
+        const grade = result.querySelector(".grade");
+        grade.textContent = r.grade + "%";
+        grade.className = "grade " + (r.grade === 100 ? "ok" : r.grade > 0 ? "part" : "bad");
+        const fb = result.querySelector(".fb");
+        fb.dir = he ? "rtl" : "ltr";
+        fb.textContent = r.feedback;
+        result.querySelector(".when").textContent = (he ? "ניסיון " : "Attempt ") + attempts;
+        result.hidden = false;
+        typeset(fb);
+    });
+});
+typeset(document.querySelector("main"));
 
 /* ---------- the computer keyboard goes to the keyboard clicked last ---------- */
 let active = null;
@@ -243,13 +499,42 @@ function codeFor(name, hostId, config, extra) {
 }
 $("codeNumeric").textContent = codeFor("numericKbd", "kbdNumeric", NUMERIC);
 $("codeAlgebra").textContent = codeFor("algebraKbd", "kbdAlgebra", ALGEBRA);
-$("codeEquation").textContent = codeFor("equationKbd", "kbdEquation", EQUATION,
-    "\n\n// one \"=\" only: ignore a second one\n" +
-    "const insertEquals = equationKbd.insertEquals;\n" +
-    "equationKbd.insertEquals = function () {\n" +
-    "    if (this.getAST().elements.length >= 2) return;\n" +
-    "    insertEquals.call(this);\n" +
-    "};");
+/* one "=" only - the same small function for examples 3 and 4 */
+const ONE_EQUALS = "\n\n// one \"=\" only: a second one is ignored\n" +
+    "function oneEquals(keyboard) {\n" +
+    "    const insertEquals = keyboard.insertEquals;\n" +
+    "    keyboard.insertEquals = function () {\n" +
+    "        if (this.getAST().elements.length >= 2) return;\n" +
+    "        insertEquals.call(this);\n" +
+    "    };\n" +
+    "}\n";
+$("codeEquation").textContent = codeFor("equationKbd", "kbdEquation", EQUATION, ONE_EQUALS + "oneEquals(equationKbd);");
+$("codeFunction").textContent = codeFor("functionKbd", "kbdFunction", FUNCTION, ONE_EQUALS + "oneEquals(functionKbd);\n\n" +
+    "// the reference answer g(x) = (x+4)^2 - typed with this keyboard: g, f( ), x, →, =, (, x, +, 4, →, x²");
+$("codeUnits").textContent = codeFor("unitsKbd", "kbdUnits", UNITS,
+    "\n\n// the unit is kept apart from the expression:\n" +
+    "//   unitsKbd.getUnit()       -> \"km\" (\"\" when none was chosen)\n" +
+    "//   unitsKbd.getUnitScale()  -> 1000 (the factor to the base unit: 2 km = 2000 m)\n" +
+    "// the reference answer: 2 with the unit km");
+$("codeComplex").textContent = codeFor("complexKbd", "kbdComplex", COMPLEX,
+    "\n// i: in the x… panel, or the letter i on the computer keyboard (the imaginary unit, not a variable)");
+/* the check, added to each example's code */
+Object.keys(EXERCISES).forEach(function (id) {
+    const ex = EXERCISES[id], name = { Numeric: "numericKbd", Algebra: "algebraKbd", Equation: "equationKbd", Function: "functionKbd", Units: "unitsKbd", Complex: "complexKbd" }[id];
+    const student = ex.unit !== undefined ? "{ answer: " + name + ".getAST(), unit: " + name + ".getUnit() }" : name + ".getAST()";
+    const reference = ex.unit !== undefined ? "{ answer: reference, unit: \"" + ex.unit + "\" }" : "reference";
+    /* a rubric: only what differs from the default table (here: the form category) */
+    const rubricChange = ex.rubric ? Object.keys(ex.rubric.categories).filter(function (c) {
+        return JSON.stringify(ex.rubric.categories[c]) !== JSON.stringify(MathCheck.defaults.rubric.categories[c]);
+    }) : [];
+    $("code" + id).textContent += "\n\n// the check (mathCheck.js), on Submit:\n" +
+        "const reference = " + JSON.stringify(ex.reference) + ";   // " + MathCheck.latex(ex.reference) + (ex.unit ? " " + ex.unit : "") + "\n" +
+        "const rules = " + inline(ex.rules) + ";\n" +
+        (ex.rubric ? "const rubric = { categories: Object.assign({}, MathCheck.defaults.rubric.categories, " +
+            inline(rubricChange.reduce(function (o, c) { o[c] = ex.rubric.categories[c]; return o; }, {})) + ") };\n" : "") +
+        "const result = MathCheck.compare(" + student + ", " + reference + ", rules, " + (ex.rubric ? "rubric" : "null") + ", { language: \"" + ex.language + "\" });\n" +
+        "// result.grade (0-100), result.feedback (text with \\( \\) LaTeX)";
+});
 $("codeRouting").textContent =
     "// each keyboard: new MoodleMathKeyboard({ ..., physicalKeyboard: false })\n" +
     "let active = null;\n" +

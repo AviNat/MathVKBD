@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Avi Nathan. All rights reserved.
+  No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -233,6 +237,8 @@ main[hidden] { display: none; }
       <label>Derivation <select id="derivation"><option>lastOnly</option><option>allSteps</option></select></label>
       <label class="check"><input type="checkbox" id="diagnosis" checked> Diagnose a wrong value</label>
       <label class="check" title="Sets, lists, tuples, and/or: 'The element 3 is missing' - off: 'An element is missing' (does not show part of the answer)"><input type="checkbox" id="nameMissing" checked> Name missing elements</label>
+      <label title="When the reference answer has a unit: another unit of the same kind (2000 m for 2 km). Strict: only the reference's unit">Units
+        <select id="unitsMode"><option value="true">other units accepted</option><option value="note">other units + note</option><option value="strict">strict: only the reference's unit</option></select></label>
     </div>
     <h3>Equivalence laws</h3>
     <div class="grid" id="laws"></div>
@@ -250,6 +256,7 @@ main[hidden] { display: none; }
       <label>Minimum grade <input type="number" id="rbMinimum" min="0" max="100" style="width:64px"></label>
       <label class="check" title="An incomplete answer (an empty place) gives 0"><input type="checkbox" id="rbFatal_incomplete"> Fatal: incomplete</label>
       <label class="check" title="An answer of another kind (an expression for an equation) gives 0"><input type="checkbox" id="rbFatal_answerType"> Fatal: answer type</label>
+      <label class="check" title="Any unit error (missing, of the wrong kind, another unit when strict) gives 0"><input type="checkbox" id="rbFatal_units"> Fatal: unit error</label>
     </div>
     <table id="rubricTable"></table>
     <details style="margin-top:8px"><summary class="hint">Rubric JSON (edit here or in the table)</summary>
@@ -287,7 +294,7 @@ $("sources").textContent = "Libraries: " + LIBRARIES.map(function (l) {
     $("versions").textContent = parts.join("   |   ");
 })();
 const LAWS = ["commutative", "numericEvaluation", "decimalFraction", "signPlacement", "fractionForms", "powerForms", "vectorReversal", "likeTerms", "distributive", "equationTransforms"];
-const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "exactValue"];
+const FORMS = ["reducedFractions", "simplified", "expanded", "factored", "noNegativeExponents", "rationalDenominator", "realDenominator", "noRootOfNegative", "exactValue"];
 let timer = null, active = null, mjChain = null;
 window.addEventListener("error", function (e) { $("errors").textContent = "Error: " + e.message; });
 
@@ -311,6 +318,7 @@ const CATEGORIES = [
     ["precision", "Wrong number of decimals"],
     ["derivation", "Wrong step in a chain of steps"],
     ["domain", "Equivalent only in the domain (not set: −30)"],
+    ["units", "A missing unit, the wrong kind, another unit when strict (not set: −30)"],
     ["mistake", "A teacher-defined mistake"],
     ["sign", "Diagnosis: wrong sign (not set: graded as value)"],
     ["factor", "Diagnosis: missing factor (not set: as value)"],
@@ -331,7 +339,7 @@ function rubricFromUi() {
     const rubric = {
         start: Number($("rbStart").value) || 0,
         minimum: Number($("rbMinimum").value) || 0,
-        fatal: ["incomplete", "answerType"].filter(function (f) { return $("rbFatal_" + f).checked; }),
+        fatal: ["incomplete", "answerType", "units"].filter(function (f) { return $("rbFatal_" + f).checked; }),
         categories: {}
     };
     CATEGORIES.forEach(function (c) {
@@ -352,7 +360,7 @@ function rubricFromUi() {
 function rubricToUi(rubric) {
     $("rbStart").value = rubric.start !== undefined ? rubric.start : 100;
     $("rbMinimum").value = rubric.minimum !== undefined ? rubric.minimum : 0;
-    ["incomplete", "answerType"].forEach(function (f) { $("rbFatal_" + f).checked = (rubric.fatal || []).indexOf(f) >= 0; });
+    ["incomplete", "answerType", "units"].forEach(function (f) { $("rbFatal_" + f).checked = (rubric.fatal || []).indexOf(f) >= 0; });
     CATEGORIES.forEach(function (c) {
         const rule = (rubric.categories || {})[c[0]];
         const r = typeof rule === "number" ? { mode: "once", points: rule } : rule || {};
@@ -365,7 +373,7 @@ function rubricToUi(rubric) {
 function syncRubricJson() { $("rubric").value = JSON.stringify(rubricFromUi(), null, 1); }
 rubricToUi(MathCheck.defaults.rubric);
 syncRubricJson();
-["rbStart", "rbMinimum", "rbFatal_incomplete", "rbFatal_answerType"].forEach(function (id) {
+["rbStart", "rbMinimum", "rbFatal_incomplete", "rbFatal_answerType", "rbFatal_units"].forEach(function (id) {
     $(id).addEventListener("input", syncRubricJson);
     $(id).addEventListener("change", syncRubricJson);
 });
@@ -450,7 +458,9 @@ function readRules() {
             sameSolutions: $("sameSolutions").value === "note" ? "note" : $("sameSolutions").value === "true"
         },
         diagnosis: $("diagnosis").checked,
-        feedback: { nameMissing: $("nameMissing").checked }
+        feedback: { nameMissing: $("nameMissing").checked },
+        units: $("unitsMode").value === "strict" ? { otherUnits: true, strict: true }
+            : { otherUnits: $("unitsMode").value === "note" ? "note" : true, strict: false }
     };
     document.querySelectorAll("[data-law]").forEach(function (s) {
         rules.equivalence[s.dataset.law] = s.value === "note" ? "note" : s.value === "true";
@@ -654,7 +664,7 @@ function makeKeyboard(hostId) {
 /* a new keyboard in its host with the current settings - what was typed in it stays */
 function rebuild(hostId) {
     const old = keyboards[hostId];
-    const saved = old ? { ast: old.editorAST, cursor: old.cursor, nextId: old.nextId } : null;
+    const saved = old ? { ast: old.editorAST, cursor: old.cursor, nextId: old.nextId, unitValue: old.unitValue, unitScale: old.unitScale } : null;
     if (old) old.destroy();
     $(hostId).innerHTML = "";
     const k = makeKeyboard(hostId);
@@ -662,6 +672,8 @@ function rebuild(hostId) {
         k.editorAST = saved.ast;
         k.cursor = saved.cursor;
         k.nextId = saved.nextId;
+        k.unitValue = saved.unitValue || "";
+        k.unitScale = saved.unitScale || 1;
         k.changed();
     }
     keyboards[hostId] = k;
@@ -751,14 +763,26 @@ function exercisePackage() {
         language: $("language").value,
         keyboard: keyboardConfig(KB),
         reference: stripSrc(keyboards.refHost.getAST()),
+        referenceUnit: keyboards.refHost.getUnit() || null,       // the reference's unit (getUnit()), null: none asked
         rules: withoutDefaults(readRules(), MathCheck.defaults.rules),
         rubric: rubric,
         playground: {
             keyboardSettings: KB,
             referenceEditor: keyboards.refHost.getEditorAST(),
-            studentEditor: keyboards.stuHost.getEditorAST()
+            studentEditor: keyboards.stuHost.getEditorAST(),
+            referenceUnit: unitOf("refHost"),
+            studentUnit: unitOf("stuHost")
         }
     };
+}
+/* a checker keyboard's unit, to save and restore: { value, scale } or null */
+function unitOf(hostId) {
+    const k = keyboards[hostId];
+    return k && k.getUnit() ? { value: k.getUnit(), scale: k.getUnitScale() } : null;
+}
+function setUnitOf(hostId, unit) {
+    const k = keyboards[hostId];
+    if (unit && unit.value) k.selectUnit(unit); else k.clearUnit();
 }
 
 /* a value of the defaults merged with the file's (the file keeps only what differs) */
@@ -790,6 +814,7 @@ function writeRules(rules) {
     $("derivation").value = r.statements.derivation || "lastOnly";
     $("diagnosis").checked = r.diagnosis !== false;
     $("nameMissing").checked = r.feedback.nameMissing !== false;
+    $("unitsMode").value = r.units.strict === true || r.units.otherUnits === false ? "strict" : r.units.otherUnits === "note" ? "note" : "true";
     document.querySelectorAll("[data-law]").forEach(function (s) {
         const v = r.equivalence[s.dataset.law];
         s.value = v === "note" ? "note" : String(v !== false);
@@ -837,6 +862,8 @@ function loadPackage(pkg, name, handle) {
         /* 2. the answers typed in the checker */
         const p = pkg.playground || {};
         loadEditor("refHost", p.referenceEditor);
+        setUnitOf("refHost", p.referenceUnit || (pkg.referenceUnit ? { value: pkg.referenceUnit } : null));
+        setUnitOf("stuHost", p.studentUnit || null);
         loadEditor("stuHost", p.studentEditor);
         /* 3. the rules, the rubric, the feedback language */
         writeRules(pkg.rules);
@@ -995,7 +1022,11 @@ function check() {
     const ref = keyboards.refHost.getAST(), stu = keyboards.stuHost.getAST();
     $("refJson").value = JSON.stringify(ref, function (k, v) { return k === "src" ? undefined : v; });
     $("code").value = codeText(rules, rubric, ref);
-    const result = MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
+    /* a unit chosen on the reference keyboard: both answers with their units */
+    const refUnit = keyboards.refHost.getUnit();
+    const result = refUnit
+        ? MathCheck.compare({ answer: stu, unit: keyboards.stuHost.getUnit() || null }, { answer: ref, unit: refUnit }, rules, rubric, { language: $("language").value, debug: true })
+        : MathCheck.compare(stu, ref, rules, rubric, { language: $("language").value, debug: true });
 
     $("grade").textContent = result.grade + "%";
     $("grade").style.color = result.grade === 100 ? "var(--ok)" : "var(--bad)";

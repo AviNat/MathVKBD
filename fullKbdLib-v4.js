@@ -1,5 +1,9 @@
 /*
- * MoodleMathKeyboard V4 (version 4.1.0 - MoodleMathKeyboard.version)
+ * Copyright (c) 2026 Avi Nathan. All rights reserved.
+ * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
+ */
+/*
+ * MoodleMathKeyboard V4 (version 4.1.2 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -2827,7 +2831,10 @@ MoodleMathKeyboard.prototype.getNamedFunctionCursorContext = function() {
 
     return null;
 };
+/* AC: the answer and its unit (2026-10-23) */
 MoodleMathKeyboard.prototype.clearAll = function () {
+    this.unitValue = "";
+    this.unitScale = 1;
     this.editorAST = this.makeChain();
     this.cursor = {
         seqId: this.editorAST.elements[0].id,
@@ -6168,7 +6175,17 @@ MoodleMathKeyboard.prototype.handlePhysicalKey = function(event) {
 
         variable = this.findVariableForKey(key);
 
-        if (!variable && this.config.acceptLowercaseVariables) {
+        /*
+         * e and i typed are the constants, as the keys of the variables panel (2026-10-23): e always, i with
+         * complexNumbers - not a variable named e or i (it looked the same and was graded as an unknown). A variable
+         * the configuration names e or i explicitly still wins.
+         */
+        if (!variable && (key === "e" || (key === "i" && this.config.complexNumbers))) {
+            this.insertConstant(key, key);
+            handled = true;
+        }
+
+        else if (!variable && this.config.acceptLowercaseVariables) {
 
             variable = {
                 id: key,
@@ -6622,8 +6639,9 @@ MoodleMathKeyboard.prototype.destroy = function () {
 };
 /*
  * The library version (MoodleMathKeyboard.version). 4.1.0 (2026-10-22): the MathJax queue, no cursor in getLatex(),
- * no button for an empty panel.
+ * no button for an empty panel. 4.1.1 (2026-10-23): AC clears the unit too. 4.1.2: e and i typed on the computer
+ * keyboard are the constants (as the panel keys), not variables.
  */
-MoodleMathKeyboard.version = "4.1.0";
+MoodleMathKeyboard.version = "4.1.2";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
