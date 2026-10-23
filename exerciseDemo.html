@@ -11,7 +11,8 @@
     1. MathJax 3 - the keyboard and the feedback draw math with it (the [tex]/html extension is required)
     2. fullKbdLib-v4.js - the keyboard        (MoodleMathKeyboard)
     3. mathCheck.js     - the checker         (MathCheck)
-  The exercise itself is data (EXERCISE below), in the format the playground saves ("Exercise file" tab).
+  The exercise itself is data (EXERCISE below), in the format the playground saves ("Exercise file" tab): a .mchk
+  file (a mathCheck exercise - JSON inside; JSON.parse its text to get this object).
 -->
 <html lang="he" dir="rtl">
 <head>
@@ -66,7 +67,7 @@ body { font: 17px/1.6 "Segoe UI", Arial, sans-serif; color: #1d2733; background:
 
 <script>
 /*
- * THE EXERCISE - data, as saved by the playground (mathCheckPlayground.html, tab "3. Exercise file").
+ * THE EXERCISE - data, as saved by the playground (mathCheckPlayground.html, tab "3. Exercise file", a .mchk file).
  * A learning system stores this with the question and gives it to the page.
  */
 const EXERCISE = {

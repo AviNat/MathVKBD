@@ -95,6 +95,11 @@ Only inside brackets:
 - `x ≠ 0, 1` **is supported**: converted to `AND(x≠0, x≠1)` (equivalent to `x∉{0,1}`).
 - `x = 2, 3` **is not accepted** (mathematically wrong). Students will write it, so it should be recognized
   and given specific feedback ("write x=2 ∨ x=3"); internally it can be converted to `OR` so the values can still be checked.
+  **Done 2026-10-23** (keyboard 4.1.3, mathCheck 0.7.0): a comma is accepted at the top level too (before, it was dropped
+  and the digits joined: `x = 1, 5` became `x = 15`); `x = 1, 5` is `chain[x, list[1, 5]]`, `x ≠ 1, 5` is
+  `list[(x ≠ 1), 5]`. mathCheck compares the values as a set with the other forms (`x = 3 ± 2`, `x = 1 ∨ x = 5`,
+  `x ∈ {1, 5}`; `x ≠ 1 ∧ x ≠ 5`, `x ∉ {1, 5}`) and notes the list form (rules `solutions` / `exclusions`).
+  Inner slots (exponents, fraction parts) still drop a comma - open.
 
 ### Symbol groups - DRAFT, waiting for a math educator's review (2026-10-22)
 The user will align the groups with the curriculum and its conventions before anything is changed. Proposal:

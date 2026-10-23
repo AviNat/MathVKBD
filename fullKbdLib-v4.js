@@ -3,7 +3,7 @@
  * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
  */
 /*
- * MoodleMathKeyboard V4 (version 4.1.2 - MoodleMathKeyboard.version)
+ * MoodleMathKeyboard V4 (version 4.1.3 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -4527,7 +4527,14 @@ MoodleMathKeyboard.prototype.makeCommaButton = function(row, symbol) {
 };
 
 MoodleMathKeyboard.prototype.insertSeparator = function(def) {
-    if (!this.syntaxAllows(def.id)) return;
+    /*
+     * A comma at the top level too (2026-10-23): "x = 1, 5", "x ≠ 1, 5" - not a proper form, but students write it;
+     * it was dropped and the digits joined (x = 15). The tree makes it a list; the checker recognizes it.
+     * Inner slots (exponents, fraction parts...) still take a comma only inside brackets.
+     */
+    let atRoot = def.id === "comma" && this.normalizeCursorToSequence() && this.cursorAtRootElement() &&
+        ACTION_RULES.comma.validate(this);
+    if (!atRoot && !this.syntaxAllows(def.id)) return;
 
     if (!this.normalizeCursorToSequence()) return;
 
@@ -6640,8 +6647,9 @@ MoodleMathKeyboard.prototype.destroy = function () {
 /*
  * The library version (MoodleMathKeyboard.version). 4.1.0 (2026-10-22): the MathJax queue, no cursor in getLatex(),
  * no button for an empty panel. 4.1.1 (2026-10-23): AC clears the unit too. 4.1.2: e and i typed on the computer
- * keyboard are the constants (as the panel keys), not variables.
+ * keyboard are the constants (as the panel keys), not variables. 4.1.3: a comma at the top level (x = 1, 5 - it was
+ * dropped and the digits joined).
  */
-MoodleMathKeyboard.version = "4.1.2";
+MoodleMathKeyboard.version = "4.1.3";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();

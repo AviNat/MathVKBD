@@ -127,14 +127,16 @@ main[hidden] { display: none; }
   <section class="wide">
     <h2>Exercise file</h2>
     <div class="hint">One file holds everything an exercise needs - the student's keyboard (tab 1), the reference answer,
-      the rules and the rubric (tab 2) - so the parts always belong together. Open it again to change the exercise.</div>
+      the rules and the rubric (tab 2) - so the parts always belong together. Open it again to change the exercise.
+      The file has its own extension, <code>.mchk</code> (a mathCheck exercise; JSON inside). Older <code>.json</code>
+      files still open - Save then makes a new <code>.mchk</code> file.</div>
     <div class="file-bar">
       <button type="button" id="openBtn">Open…</button>
       <button type="button" id="saveBtn" class="primary">Save</button>
       <button type="button" id="saveAsBtn">Save as…</button>
       <span id="fileName">(new exercise)</span>
       <span id="fileDirty" class="dirty"></span>
-      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+      <input type="file" id="fileInput" accept=".mchk,.json" hidden>
     </div>
     <table id="fileSummary"></table>
   </section>
@@ -239,9 +241,13 @@ main[hidden] { display: none; }
       <label class="check" title="Sets, lists, tuples, and/or: 'The element 3 is missing' - off: 'An element is missing' (does not show part of the answer)"><input type="checkbox" id="nameMissing" checked> Name missing elements</label>
       <label title="When the reference answer has a unit: another unit of the same kind (2000 m for 2 km). Strict: only the reference's unit">Units
         <select id="unitsMode"><option value="true">other units accepted</option><option value="note">other units + note</option><option value="strict">strict: only the reference's unit</option></select></label>
+      <label title="A reference with ±: an answer with one of the two values (7 for ±7, 5 for 2 ± 3). Partial: the rubric category plusMinus; wrong: a wrong value">± one value
+        <select id="pmOneValue"><option value="partial">partial credit</option><option value="wrong">wrong</option></select></label>
     </div>
     <h3>Equivalence laws</h3>
     <div class="grid" id="laws"></div>
+    <h3>Forms of solutions and excluded values</h3>
+    <div class="grid" id="valueSetForms"></div>
     <h3>Form checks (only when the value is right)</h3>
     <div class="grid" id="forms"></div>
     <div class="grid" style="margin-top:6px"><label>Isolated variable <input type="text" id="isolated" size="4" placeholder="x"></label></div>
@@ -299,6 +305,19 @@ let timer = null, active = null, mjChain = null;
 window.addEventListener("error", function (e) { $("errors").textContent = "Error: " + e.message; });
 
 /* controls */
+/* rules.solutions / rules.exclusions: each form accepted, with a note, or not (an error in the category form) */
+const VALUE_SET_FORMS = [
+    ["solutions", "plusMinus", "x = 3 ± 2"], ["solutions", "or", "x = 1 ∨ x = 5"], ["solutions", "set", "x ∈ {1, 5}"],
+    ["solutions", "list", "x = 1, 5 (improper)"],
+    ["exclusions", "and", "x ≠ 1 ∧ x ≠ 5"], ["exclusions", "set", "x ∉ {1, 5}"], ["exclusions", "list", "x ≠ 1, 5 (improper)"]
+];
+VALUE_SET_FORMS.forEach(function (f) {
+    $("valueSetForms").insertAdjacentHTML("beforeend", "<label>" + f[2] + " <select data-vs='" + f[0] + "." + f[1] + "'>" +
+        "<option value='true'>accept</option><option value='note'>accept + note</option><option value='false'>not accepted</option></select></label>");
+    /* start at the library's default (a list: "note") */
+    const d = (MathCheck.defaults.rules[f[0]] || {})[f[1]];
+    document.querySelector("[data-vs='" + f[0] + "." + f[1] + "']").value = d === "note" ? "note" : String(d !== false);
+});
 LAWS.forEach(function (law) {
     $("laws").insertAdjacentHTML("beforeend", "<label>" + law + " <select data-law='" + law + "'>" +
         "<option value='true'>accept</option><option value='note'>accept + note</option><option value='false'>not accepted</option></select></label>");
@@ -319,6 +338,7 @@ const CATEGORIES = [
     ["derivation", "Wrong step in a chain of steps"],
     ["domain", "Equivalent only in the domain (not set: −30)"],
     ["units", "A missing unit, the wrong kind, another unit when strict (not set: −30)"],
+    ["plusMinus", "± : one of the two values, or one part of a ± b wrong (not set: −50)"],
     ["mistake", "A teacher-defined mistake"],
     ["sign", "Diagnosis: wrong sign (not set: graded as value)"],
     ["factor", "Diagnosis: missing factor (not set: as value)"],
@@ -459,6 +479,7 @@ function readRules() {
         },
         diagnosis: $("diagnosis").checked,
         feedback: { nameMissing: $("nameMissing").checked },
+        plusMinus: { oneValue: $("pmOneValue").value },
         units: $("unitsMode").value === "strict" ? { otherUnits: true, strict: true }
             : { otherUnits: $("unitsMode").value === "note" ? "note" : true, strict: false }
     };
@@ -466,6 +487,12 @@ function readRules() {
         rules.equivalence[s.dataset.law] = s.value === "note" ? "note" : s.value === "true";
     });
     document.querySelectorAll("[data-form]").forEach(function (s) { if (s.value !== "off") rules.form[s.dataset.form] = s.value; });
+    rules.solutions = {};
+    rules.exclusions = {};
+    document.querySelectorAll("[data-vs]").forEach(function (s) {
+        const p = s.dataset.vs.split(".");
+        rules[p[0]][p[1]] = s.value === "note" ? "note" : s.value === "true";
+    });
     if ($("isolated").value.trim()) rules.form.isolatedVariable = $("isolated").value.trim();
     /* "y: -pi/2 .. pi/2; x: 0 .." -> { y: { min: "-pi/2", max: "pi/2" }, x: { min: "0" } } */
     const domain = {};
@@ -748,6 +775,9 @@ $("tabBtnFile").addEventListener("click", function () { showTab("file"); });
    chemistry builder: the file picker where the browser has it, else a download / a file input)
    ============================================================ */
 const FILE_FORMAT = "mathCheck-exercise";
+/* the exercise file's own extension (2026-10-23): ".mchk" - JSON inside; ".json" files still open */
+const FILE_EXTENSION = ".mchk";
+const FILE_TYPE = { description: "mathCheck exercise", accept: { "application/json": [FILE_EXTENSION] } };
 let fileHandle = null, fileName = null, dirty = false, loading = false;
 
 function stripSrc(ast) { return JSON.parse(JSON.stringify(ast, function (k, v) { return k === "src" ? undefined : v; })); }
@@ -815,6 +845,7 @@ function writeRules(rules) {
     $("diagnosis").checked = r.diagnosis !== false;
     $("nameMissing").checked = r.feedback.nameMissing !== false;
     $("unitsMode").value = r.units.strict === true || r.units.otherUnits === false ? "strict" : r.units.otherUnits === "note" ? "note" : "true";
+    $("pmOneValue").value = r.plusMinus.oneValue === "wrong" ? "wrong" : "partial";
     document.querySelectorAll("[data-law]").forEach(function (s) {
         const v = r.equivalence[s.dataset.law];
         s.value = v === "note" ? "note" : String(v !== false);
@@ -822,6 +853,11 @@ function writeRules(rules) {
     document.querySelectorAll("[data-form]").forEach(function (s) {
         const v = r.form[s.dataset.form];
         s.value = v === "note" || v === "error" ? v : (v && v.level) || "off";
+    });
+    document.querySelectorAll("[data-vs]").forEach(function (s) {
+        const p = s.dataset.vs.split(".");
+        const v = (r[p[0]] || {})[p[1]];
+        s.value = v === "note" ? "note" : String(v !== false);
     });
     const iso = r.form.isolatedVariable;
     $("isolated").value = typeof iso === "string" ? iso : iso && iso.variable ? iso.variable : "";
@@ -925,7 +961,7 @@ async function openFile() {
     if (!confirmDiscard()) return;
     if (window.showOpenFilePicker) {
         try {
-            const handles = await window.showOpenFilePicker({ types: [{ description: "Exercise", accept: { "application/json": [".json"] } }] });
+            const handles = await window.showOpenFilePicker({ types: [{ description: "mathCheck exercise", accept: { "application/json": [FILE_EXTENSION, ".json"] } }] });
             const file = await handles[0].getFile();
             openText(await file.text(), file.name, handles[0]);
         } catch (e) { if (e.name !== "AbortError") window.alert(e.message); }
@@ -947,11 +983,13 @@ $("fileInput").addEventListener("change", function () {
 async function saveFile(saveAs) {
     let text;
     try { text = JSON.stringify(exercisePackage(), null, 1); } catch (e) { window.alert("The rubric JSON is not valid: " + e.message); return; }
-    const suggested = (fileName || "exercise").replace(/\.json$/i, "") + ".json";
+    const suggested = (fileName || "exercise").replace(/\.(mchk|json)$/i, "") + FILE_EXTENSION;
     if (window.showSaveFilePicker) {
         try {
             let handle = saveAs ? null : fileHandle;
-            if (!handle) handle = await window.showSaveFilePicker({ suggestedName: suggested, types: [{ description: "Exercise", accept: { "application/json": [".json"] } }] });
+            /* a file opened as .json is saved as a new .mchk file (the old one stays as it is) */
+            if (handle && !handle.name.toLowerCase().endsWith(FILE_EXTENSION)) handle = null;
+            if (!handle) handle = await window.showSaveFilePicker({ suggestedName: suggested, types: [FILE_TYPE] });
             const writable = await handle.createWritable();
             await writable.write(text);
             await writable.close();

@@ -326,6 +326,48 @@ const SECTIONS = [
     ]
 },
 {
+    id: "plusMinus", title: { en: "Answers with ±" },
+    intro: { en: "A reference with ± (a ± b, ±b) stands for two values; the student's answer must give the same pair (∓ and a ± (−b) are the same pair). Answers that give part of it get partial credit, in the rubric category plusMinus (default 50)." },
+    items: [
+        {
+            id: "plusMinus.oneValue", path: "rules.plusMinus.oneValue", values: "\"partial\" (default) | \"wrong\"",
+            text: { en: "One of the two values without ±: 7 or −7 for ±7, 5 for 2 ± 3, 2x + 3y + 10 for (2x + 3) ± (3y + 7). \"partial\": the feedback says the ± is missing and the category plusMinus takes its points; \"wrong\": a wrong value (an advanced exercise where the student must not miss the ±). Also a ± b with one part right (2 ± 4 for 2 ± 3) is partial: the wrong part is named - each part is compared by value." },
+            examples: [
+                { caption: "7 for ±7", ref: "(plusMinus 7)", student: "7", expect: { grade: 50, codes: ["missing-plus-minus"] } },
+                { caption: "5 for 2 ± 3", ref: "(plusMinus 2 3)", student: "5", expect: { grade: 50, codes: ["missing-plus-minus"] } },
+                { caption: "2 ± 4 for 2 ± 3: the part after ±", ref: "(plusMinus 2 3)", student: "(plusMinus 2 4)", expect: { grade: 50, codes: ["pm-second-wrong"] } },
+                { caption: "(3 + 2x) ± (7 + 3y) for (2x + 3) ± (3y + 7)", ref: "(plusMinus (+ (* 2 x) 3) (+ (* 3 y) 7))", student: "(plusMinus (+ 3 (* 2 x)) (+ 7 (* 3 y)))", expect: { grade: 100 } },
+                { caption: "2x + 3y + 10 for (2x + 3) ± (3y + 7), oneValue \"wrong\"", ref: "(plusMinus (+ (* 2 x) 3) (+ (* 3 y) 7))", student: "(+ (* 2 x) (* 3 y) 10)", rules: { plusMinus: { oneValue: "wrong" } }, expect: { grade: 0, codes: ["wrong-value"] } }
+            ]
+        }
+    ]
+},
+{
+    id: "valueSets", title: { en: "Solutions and excluded values in different forms" },
+    intro: { en: "The same set of values can be written in several forms. Solutions: x = 3 ± 2, x = 1 ∨ x = 5, x ∈ {1, 5}, and the improper x = 1, 5. Excluded values (a domain): x ≠ 1 ∧ x ≠ 5, x ∉ {1, 5}, and the improper x ≠ 1, 5. The values are compared as a set - each missing or wrong value named (category elements); the form by the rules below. One of the two values of x = a ± b follows plusMinus.oneValue. Two sets (x ∈ {…} for x ∈ {…}) are compared as a membership." },
+    items: [
+        {
+            id: "solutions", path: "rules.solutions", values: "{ plusMinus, or, set, list }: true | \"note\" | false (default: true, list \"note\")",
+            text: { en: "Which forms of the solutions are accepted. true: accepted; \"note\": accepted with a remark; false: an error in the category form (the values are still right). A list after = (x = 1, 5) is not a proper form - the remark shows the proper forms." },
+            examples: [
+                { caption: "x ∈ {1, 5} for x = 3 ± 2", ref: "x ‖ (plusMinus 3 2)", student: "(memberOf x set{1, 5})", expect: { grade: 100 } },
+                { caption: "x = 1, 5 for x = 3 ± 2: a list, noted", ref: "x ‖ (plusMinus 3 2)", student: "x ‖ list[1, 5]", expect: { grade: 100, notes: ["solution-list"] } },
+                { caption: "x ∈ {1, 5} when the set form is not accepted", ref: "x ‖ (plusMinus 3 2)", student: "(memberOf x set{1, 5})", rules: { solutions: { set: false } }, expect: { grade: 90, codes: ["solution-form-not-accepted"] } },
+                { caption: "x = 5 for x = 1 ∨ x = 5: a solution missing", ref: "(or (equal x 1) (equal x 5))", student: "x ‖ 5", expect: { grade: 75, codes: ["missing-solution"] } }
+            ]
+        },
+        {
+            id: "exclusions", path: "rules.exclusions", values: "{ and, set, list }: true | \"note\" | false (default: true, list \"note\")",
+            text: { en: "Which forms of the excluded values (a domain) are accepted, as for solutions: x ≠ 1 ∧ x ≠ 5, x ∉ {1, 5}, and the improper x ≠ 1, 5." },
+            examples: [
+                { caption: "x ∉ {1, 5} for x ≠ 1 ∧ x ≠ 5", ref: "(and (notEqual x 1) (notEqual x 5))", student: "(notMemberOf x set{1, 5})", expect: { grade: 100 } },
+                { caption: "x ≠ 1, 5 for x ∉ {1, 5}: a list, noted", ref: "(notMemberOf x set{1, 5})", student: "list[(notEqual x 1), 5]", expect: { grade: 100, notes: ["exclusion-list"] } },
+                { caption: "x ≠ 1 for x ∉ {1, 5}: 5 too", ref: "(notMemberOf x set{1, 5})", student: "(notEqual x 1)", expect: { grade: 75, codes: ["missing-excluded"] } }
+            ]
+        }
+    ]
+},
+{
     id: "units", title: { en: "Units" },
     intro: { en: "When the reference answer has a unit, the student's unit is checked too. The keyboard keeps the unit apart from the expression (keyboard.getUnit()), so both answers are passed as { answer, unit }: compare({ answer: keyboard.getAST(), unit: keyboard.getUnit() }, { answer: reference, unit: \"km\" }, …). A missing unit or a unit of the wrong kind costs the points of the rubric category units; the number is still compared." },
     items: [
@@ -432,6 +474,7 @@ const SECTIONS = [
         { id: "rubric.categories.precision", path: "rubric.categories.precision", values: "default once, 10", text: { en: "The wrong number of decimals (numbers.decimals) or a rounding error (numbers.closeButWrong)." } },
         { id: "rubric.categories.derivation", path: "rubric.categories.derivation", values: "default once, 20", text: { en: "A wrong step in a chain of steps (statements.derivation: allSteps)." } },
         { id: "rubric.categories.domain", path: "rubric.categories.domain", values: "default once, 30 (also when the rubric leaves it out)", text: { en: "An equation that is the same only inside the domain of statements.domain." } },
+        { id: "rubric.categories.plusMinus", path: "rubric.categories.plusMinus", values: "default once, 50 (also when the rubric leaves it out)", text: { en: "Part of a ± answer: one of the two values without ±, or a ± b with one part wrong." } },
         { id: "rubric.categories.units", path: "rubric.categories.units", values: "default once, 30 (also when the rubric leaves it out)", text: { en: "A missing unit, a unit of the wrong kind, or another unit when units.otherUnits is false." } },
         { id: "rubric.categories.mistake", path: "rubric.categories.mistake", values: "default once, 100", text: { en: "A teacher-defined mistake (rules.mistakes) without its own points." } },
         { id: "rubric.categories.sign", path: "rubric.categories.sign", values: "not set (graded as value)", text: { en: "Diagnosis: only the sign is wrong, −(x + 1) for x + 1. Set it to give partial credit." } },

@@ -23,7 +23,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "0.5.0";
+const VERSION = "0.7.0";
 
 /* ============================================================
    DEFAULTS
@@ -64,6 +64,12 @@ const DEFAULT_RULES = {
         decimals: null,                  // { exactly | min | max: n }
         closeButWrong: 0                 // percent: outside the tolerance but within it -> "rounding"
     },
+    plusMinus: {
+        oneValue: "partial"              // 7 for ±7: "partial" (category plusMinus) | "wrong" (a wrong value)
+    },
+    /* the forms of a set of solutions / of excluded values: true accepted, "note", false an error (category form) */
+    solutions: { plusMinus: true, or: true, set: true, list: "note" },     // x = 3 ± 2, x = 1 ∨ x = 5, x ∈ {1, 5}, x = 1, 5
+    exclusions: { and: true, set: true, list: "note" },                    // x ≠ 1 ∧ x ≠ 5, x ∉ {1, 5}, x ≠ 1, 5
     units: {
         otherUnits: true,                // 2000 m for 2 km: true accepted, "note" accepted with a note, false an error
         strict: false                    // true: only the reference's unit (as otherUnits: false); a unit error fatal: rubric.fatal "units"
@@ -93,6 +99,7 @@ const DEFAULT_RUBRIC = {
         derivation: { mode: "once", points: 20 },
         domain: { mode: "once", points: 30 },
         units: { mode: "once", points: 30 },
+        plusMinus: { mode: "once", points: 50 },
         mistake: { mode: "once", points: 100 }
     }
 };
@@ -104,6 +111,16 @@ const CATEGORY_OF = {
     "wrong-value": "value",
     "not-evaluated": "value",
     "domain-only": "domain",
+    "missing-solution": "elements",
+    "extra-solution": "elements",
+    "missing-excluded": "elements",
+    "extra-excluded": "elements",
+    "solution-list": "form",
+    "exclusion-list": "form",
+    "solution-form-not-accepted": "form",
+    "missing-plus-minus": "plusMinus",
+    "pm-first-wrong": "plusMinus",
+    "pm-second-wrong": "plusMinus",
     "missing-unit": "units",
     "wrong-unit": "units",
     "unit-not-accepted": "units",
@@ -142,7 +159,7 @@ const CATEGORY_OF = {
 /* the diagnosis categories: graded through "value" until the rubric sets them (CHECKING-API-DESIGN 9.2) */
 const DIAGNOSIS_CATEGORIES = ["sign", "factor", "scale", "term"];
 /* categories that cost points even when the teacher's rubric does not list them */
-const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 }, units: { mode: "once", points: 30 } };
+const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 }, units: { mode: "once", points: 30 }, plusMinus: { mode: "once", points: 50 } };
 
 /* ============================================================
    SMALL HELPERS
@@ -1064,6 +1081,19 @@ const TEXT = {
         "wrong-value": "The value of the answer is not correct.",
         "not-evaluated": "Work out {what} in the answer and write the result.",
         "domain-only": "The equation is equivalent to the expected one only when \\({condition}\\).",
+        "missing-solution": "A solution is missing.",
+        "missing-solution-named": "The solution \\({element}\\) is missing.",
+        "extra-solution": "\\({element}\\) is not a solution.",
+        "missing-excluded": "A value to exclude is missing.",
+        "missing-excluded-named": "The value \\({element}\\) should be excluded too.",
+        "extra-excluded": "\\({element}\\) should not be excluded.",
+        "solution-list": "A list after \\(=\\) is not a proper form: write \\({joined}\\) or \\({set}\\).",
+        "exclusion-list": "A list after \\(\\ne\\) is not a proper form: write \\({joined}\\) or \\({set}\\).",
+        "solution-form-not-accepted": "The values are right, but write the answer in the form \\({form}\\).",
+        "missing-plus-minus": "Only one of the two values: the answer should have \\(\\pm\\) (both values).",
+        "pm-first-wrong": "The part before \\(\\pm\\) is not correct.",
+        "pm-second-wrong": "The part after \\(\\pm\\) is not correct.",
+        "cat-plusMinus": "\\(\\pm\\)",
         "missing-unit": "The unit is missing.",
         "wrong-unit": "The unit \\({unit}\\) is not a unit of {kind}.",
         "unit-not-accepted": "Write the answer in \\({unit}\\).",
@@ -1149,6 +1179,19 @@ const TEXT = {
         "wrong-value": "ערך התשובה אינו נכון.",
         "not-evaluated": "יש לחשב את {what} שבתשובה ולכתוב את התוצאה.",
         "domain-only": "המשוואה שקולה למשוואה הנדרשת רק כאשר \\({condition}\\).",
+        "missing-solution": "חסר פתרון.",
+        "missing-solution-named": "חסר הפתרון \\({element}\\).",
+        "extra-solution": "\\({element}\\) אינו פתרון.",
+        "missing-excluded": "חסר ערך שצריך להוציא.",
+        "missing-excluded-named": "צריך להוציא גם את \\({element}\\).",
+        "extra-excluded": "אין להוציא את \\({element}\\).",
+        "solution-list": "רשימה אחרי \\(=\\) אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
+        "exclusion-list": "רשימה אחרי \\(\\ne\\) אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
+        "solution-form-not-accepted": "הערכים נכונים, אבל יש לכתוב את התשובה בצורה \\({form}\\).",
+        "missing-plus-minus": "רק אחד משני הערכים: בתשובה צריך \\(\\pm\\) (שני הערכים).",
+        "pm-first-wrong": "החלק שלפני \\(\\pm\\) אינו נכון.",
+        "pm-second-wrong": "החלק שאחרי \\(\\pm\\) אינו נכון.",
+        "cat-plusMinus": "\\(\\pm\\)",
         "missing-unit": "חסרה יחידת המידה.",
         "wrong-unit": "היחידה \\({unit}\\) אינה יחידה של {kind}.",
         "unit-not-accepted": "יש לכתוב את התשובה ב-\\({unit}\\).",
@@ -1234,6 +1277,19 @@ const TEXT = {
         "wrong-value": "قيمة الإجابة غير صحيحة.",
         "not-evaluated": "احسب {what} في الإجابة واكتب النتيجة.",
         "domain-only": "المعادلة مكافئة للمعادلة المطلوبة فقط عندما \\({condition}\\).",
+        "missing-solution": "ينقص حل.",
+        "missing-solution-named": "الحل \\({element}\\) ناقص.",
+        "extra-solution": "\\({element}\\) ليس حلًا.",
+        "missing-excluded": "تنقص قيمة يجب استثناؤها.",
+        "missing-excluded-named": "يجب استثناء \\({element}\\) أيضًا.",
+        "extra-excluded": "يجب ألا يُستثنى \\({element}\\).",
+        "solution-list": "القائمة بعد \\(=\\) ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
+        "exclusion-list": "القائمة بعد \\(\\ne\\) ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
+        "solution-form-not-accepted": "القيم صحيحة، لكن اكتب الإجابة بالصيغة \\({form}\\).",
+        "missing-plus-minus": "قيمة واحدة فقط من القيمتين: يجب أن تحتوي الإجابة على \\(\\pm\\) (القيمتين).",
+        "pm-first-wrong": "الجزء قبل \\(\\pm\\) غير صحيح.",
+        "pm-second-wrong": "الجزء بعد \\(\\pm\\) غير صحيح.",
+        "cat-plusMinus": "\\(\\pm\\)",
         "missing-unit": "وحدة القياس ناقصة.",
         "wrong-unit": "الوحدة \\({unit}\\) ليست وحدة {kind}.",
         "unit-not-accepted": "اكتب الإجابة بوحدة \\({unit}\\).",
@@ -1320,7 +1376,7 @@ const LRI = "⁦", PDI = "⁩";
 function feedbackText(code, language, params, custom) {
     const lang = TEXT[language] ? language : "en";
     /* a missing element / statement with its name, when the rules give it (feedback.nameMissing) */
-    const named = (code === "missing-element" && params && params.element !== undefined) ||
+    const named = ((code === "missing-element" || code === "missing-solution" || code === "missing-excluded") && params && params.element !== undefined) ||
         (code === "missing-statement" && params && params.statement !== undefined) ||
         (code === "not-equivalent-form" && params && params.difference !== undefined);
     const key = named && !(custom && custom[code]) ? code + "-named" : code;
@@ -1909,10 +1965,11 @@ function compareOne(student, reference, rules, options, debug) {
      * The elements of two sets / lists, in any order: each missing and each extra element named (a set and the set
      * in x ∈ {...}). true when the student's has every element and nothing else (a repeated element: setDuplicates).
      */
-    const compareCollections = function (sItems, rItems) {
+    const compareCollections = function (sItems, rItems, codes) {
+        codes = codes || { missing: "missing-element", extra: "extra-element" };
         const eq = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
         const m = matchUnordered(sItems, rItems, eq);
-        m.missing.forEach(function (j) { add("error", "missing-element", missingParams("element", rItems[j]), []); });
+        m.missing.forEach(function (j) { add("error", codes.missing, missingParams("element", rItems[j]), []); });
         m.extra.forEach(function (i) {
             /* the same value as a matched element: a duplicate */
             const dup = m.pairs.some(function (p) { return eq(sItems[i], sItems[p[0]]); });
@@ -1921,7 +1978,7 @@ function compareOne(student, reference, rules, options, debug) {
                 if (lvl === "error") add("error", "duplicate-element", { element: latex(sItems[i]) }, [sItems[i]]);
                 else if (lvl === "note") add("note", "duplicate-note", { element: latex(sItems[i]) }, [sItems[i]]);
             } else {
-                add("error", "extra-element", { element: latex(sItems[i]) }, [sItems[i]]);
+                add("error", codes.extra, { element: latex(sItems[i]) }, [sItems[i]]);
             }
         });
         return m.missing.length === 0 && m.extra.every(function (i) {
@@ -1939,6 +1996,47 @@ function compareOne(student, reference, rules, options, debug) {
     if (open) {
         add("error", "not-evaluated", { what: open.type }, [open]);
         return { items: items, state: state };
+    }
+
+    /*
+     * Solutions / exclusions written in different forms: x = 3 ± 2, x = 1 ∨ x = 5, x ∈ {1, 5}, x = 1, 5 - and
+     * x ≠ 1 ∧ x ≠ 5, x ∉ {1, 5}, x ≠ 1, 5: the values compared as a set, the form by rules.solutions / exclusions.
+     */
+    const rSet = valueSetOf(r), sSet = valueSetOf(s);
+    /* (a set against a set is plain membership - "x ∈ {2, 3, 5}" need not be solutions: the membership comparison) */
+    if (rSet && sSet && rSet.variable === sSet.variable && rSet.kind === sSet.kind &&
+        !(rSet.form === "set" && sSet.form === "set") &&
+        (rSet.values.length > 1 || sSet.values.length > 1 || rSet.form !== sSet.form)) {
+        compareValueSets(sSet, rSet);
+        return { items: items, state: state };
+    }
+
+    function compareValueSets(ss, rs) {
+        const solutions = rs.kind === "equal";
+        /* one of the two values of x = a ± b: the ± rule (plusMinus.oneValue) */
+        if (rs.form === "plusMinus" && ss.values.length === 1) {
+            const same = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
+            if (rs.values.some(function (v) { return same(ss.values[0], v); })) {
+                if ((rules.plusMinus || {}).oneValue === "wrong") add("error", "wrong-value", {}, [s]);
+                else add("error", "missing-plus-minus", {}, [s]);
+                return;
+            }
+        }
+        const right = compareCollections(ss.values, rs.values, solutions
+            ? { missing: "missing-solution", extra: "extra-solution" }
+            : { missing: "missing-excluded", extra: "extra-excluded" });
+        if (!right) return;
+        state.valueRight = true;
+        /* the form: true accepted, "note", false an error (category form); a list is not a proper form */
+        const forms = (solutions ? rules.solutions : rules.exclusions) || {};
+        const level = forms[ss.form] === undefined ? true : forms[ss.form];
+        if (level === true || ss.form === rs.form) return;
+        const kind = level === "note" ? "note" : "error";
+        if (ss.form === "list") {
+            add(kind, solutions ? "solution-list" : "exclusion-list", properForms(ss, solutions), [s]);
+        } else {
+            add(kind, "solution-form-not-accepted", { form: FORM_TEMPLATE[rs.kind][rs.form] || "" }, [s]);
+        }
     }
 
     let refKind = rules.answerKind && rules.answerKind !== "auto" ? rules.answerKind : kindOf(r);
@@ -1982,7 +2080,7 @@ function compareOne(student, reference, rules, options, debug) {
             /* the value is right, the form is not one the rules accept */
             state.valueRight = true;
             add("error", "not-equivalent-form", formDifference(sAns, r, rules), [sAns]);
-        } else {
+        } else if (!plusMinusPartial(sAns, r, ctx, add, state)) {
             diagnoseWrongValue(sAns, r, eq, ctx, add, state);
         }
     } else if (refKind === "equation" || refKind === "inequality" || refKind === "statement") {
@@ -2073,6 +2171,101 @@ function compareOne(student, reference, rules, options, debug) {
     }
 
     return { items: items, state: state };
+}
+
+/*
+ * SOLUTION AND EXCLUSION SETS - an answer as { variable, kind: "equal" | "notEqual", values: [ast], form }:
+ *   x = 3 ± 2 (plusMinus), x = 1 ∨ x = 5 (or), x ∈ {1, 5} (set), x = 1, 5 (list), x = 1 (single);
+ *   x ≠ 1 ∧ x ≠ 5 (and), x ∉ {1, 5} (set), x ≠ 1, 5 (list), x ≠ 1 (single). null for anything else.
+ */
+const FORM_TEMPLATE = {
+    equal: { plusMinus: "x=a\\pm b", or: "x=a\\lor x=b", set: "x\\in\\left\\{a,b\\right\\}", list: "x=a,b", single: "x=a" },
+    notEqual: { and: "x\\ne a\\land x\\ne b", set: "x\\notin\\left\\{a,b\\right\\}", list: "x\\ne a,b", single: "x\\ne a" }
+};
+function valueSetOf(a) {
+    if (!a) return null;
+    const isVar = function (n) { return n && (n.type === "variable" || n.type === "indexedVariable"); };
+    const neg = function (n) { return { type: "operation", op: "neg", operands: [n] }; };
+    /* x = …  (the main-panel "=": a chain of 2) or the relation x = … */
+    const equation = a.type === "chain" && a.elements.length === 2 && isVar(a.elements[0]) ? { v: a.elements[0], rhs: a.elements[1] }
+        : a.type === "relation" && a.op === "equal" && isVar(a.left) ? { v: a.left, rhs: a.right } : null;
+    if (equation) {
+        const v = varKey(equation.v), rhs = equation.rhs;
+        if (rhs && rhs.type === "operation" && (rhs.op === "plusMinus" || rhs.op === "minusPlus")) {
+            const c = rhs.operands.length === 2 ? rhs.operands[0] : { type: "number", value: "0" };
+            const t = rhs.operands[rhs.operands.length - 1];
+            return { variable: v, kind: "equal", form: "plusMinus",
+                values: [{ type: "operation", op: "+", operands: [c, t] }, { type: "operation", op: "+", operands: [c, neg(t)] }] };
+        }
+        if (rhs && rhs.type === "list") return { variable: v, kind: "equal", form: "list", values: rhs.items };
+        if (rhs && !usesPlusMinus(rhs) && !hasVariable(rhs)) return { variable: v, kind: "equal", form: "single", values: [rhs] };
+        return null;
+    }
+    if (a.type === "relation" && a.op === "notEqual" && isVar(a.left) && a.right && !hasVariable(a.right)) {
+        return { variable: varKey(a.left), kind: "notEqual", form: "single", values: [a.right] };
+    }
+    if (a.type === "relation" && (a.op === "memberOf" || a.op === "notMemberOf") && isVar(a.left) && a.right && a.right.type === "set") {
+        return { variable: varKey(a.left), kind: a.op === "memberOf" ? "equal" : "notEqual", form: "set", values: a.right.elements };
+    }
+    /* x ≠ 1, 5: the list starts with the relation, the other values follow */
+    if (a.type === "list" && a.items.length > 1 && a.items[0] && a.items[0].type === "relation" &&
+        (a.items[0].op === "notEqual" || a.items[0].op === "equal") && isVar(a.items[0].left)) {
+        const rest = a.items.slice(1);
+        if (rest.some(function (n) { return !n || hasVariable(n); })) return null;
+        return { variable: varKey(a.items[0].left), kind: a.items[0].op === "equal" ? "equal" : "notEqual", form: "list",
+            values: [a.items[0].right].concat(rest) };
+    }
+    /* x = 1 ∨ x = 5, x ≠ 1 ∧ x ≠ 5 */
+    if (a.type === "operation" && (a.op === "or" || a.op === "and")) {
+        const parts = a.operands.map(valueSetOf);
+        const want = a.op === "or" ? "equal" : "notEqual";
+        if (parts.some(function (p) { return !p || p.kind !== want || p.form !== "single" || p.variable !== parts[0].variable; })) return null;
+        return { variable: parts[0].variable, kind: want, form: a.op, values: parts.map(function (p) { return p.values[0]; }) };
+    }
+    return null;
+}
+/* the proper forms of the same values, for the feedback on a list: x = 1 ∨ x = 5 or x ∈ {1, 5} */
+function properForms(set, solutions) {
+    const values = set.values.map(function (v) { return latex(v); });
+    return solutions
+        ? { joined: values.map(function (v) { return set.variable + "=" + v; }).join("\\lor "), set: set.variable + "\\in\\left\\{" + values.join(",") + "\\right\\}" }
+        : { joined: values.map(function (v) { return set.variable + "\\ne " + v; }).join("\\land "), set: set.variable + "\\notin\\left\\{" + values.join(",") + "\\right\\}" };
+}
+
+/*
+ * A reference with ± (a ± b, ±b) and a student's answer that is not the same pair of values (rules.plusMinus):
+ *   - one of the two values, without ± (7 for ±7, 5 for 2 ± 3): "missing-plus-minus" - partial, or a wrong value
+ *     when plusMinus.oneValue is "wrong" (an advanced exercise: the student must not miss the ±);
+ *   - a ± b with one part right (2 ± 4 for 2 ± 3): the wrong part named. The part after ± may come with the other
+ *     sign (2 ± (−3) is 2 ± 3).
+ * true when it decided (an error was added), false: the usual diagnosis of a wrong value.
+ */
+function plusMinusPartial(s, r, ctx, add, state) {
+    const rules = ctx.rules;
+    const isPm = function (n) { return n && n.type === "operation" && (n.op === "plusMinus" || n.op === "minusPlus"); };
+    if (!isPm(r) || !usesPlusMinus(r)) return false;
+    const parts = function (n) { return n.operands.length === 2 ? [n.operands[0], n.operands[1]] : [{ type: "number", value: "0" }, n.operands[0]]; };
+    const [rc, rt] = parts(r);
+    const same = function (a, b) { return expressionsEqual(a, b, ctx).equal; };
+
+    /* one of the two values: c + t or c − t */
+    if (!usesPlusMinus(s)) {
+        const plus = { type: "operation", op: "+", operands: [rc, rt] };
+        const minus = { type: "operation", op: "+", operands: [rc, { type: "operation", op: "neg", operands: [rt] }] };
+        if (!same(s, plus) && !same(s, minus)) return false;
+        if ((rules.plusMinus || {}).oneValue === "wrong") { add("error", "wrong-value", {}, [s]); return true; }
+        add("error", "missing-plus-minus", {}, [s]);
+        return true;
+    }
+
+    /* a ± b: part by part */
+    if (!isPm(s)) return false;
+    const [sc, st] = parts(s);
+    const centerRight = same(sc, rc);
+    const termRight = same(st, rt) || same(st, { type: "operation", op: "neg", operands: [rt] });
+    if (centerRight && !termRight) { add("error", "pm-second-wrong", {}, [st]); return true; }
+    if (!centerRight && termRight) { add("error", "pm-first-wrong", {}, [sc]); return true; }
+    return false;
 }
 
 /* a wrong expression value: a teacher mistake, then the automatic diagnosis, then "wrong value" */
