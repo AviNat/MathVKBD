@@ -2183,6 +2183,22 @@ const FORM_TEMPLATE = {
     equal: { plusMinus: "x=a\\pm b", or: "x=a\\lor x=b", set: "x\\in\\left\\{a,b\\right\\}", list: "x=a,b", single: "x=a" },
     notEqual: { and: "x\\ne a\\land x\\ne b", set: "x\\notin\\left\\{a,b\\right\\}", list: "x\\ne a,b", single: "x\\ne a" }
 };
+/* the expression with every ± (and ∓) taken as one sign: s = +1 → a + b, s = −1 → a − b (∓ the other way) */
+function withSign(node, s) {
+    if (!node || typeof node !== "object") return node;
+    if (Array.isArray(node)) return node.map(function (n) { return withSign(n, s); });
+    if (node.type === "operation" && (node.op === "plusMinus" || node.op === "minusPlus")) {
+        const sign = node.op === "plusMinus" ? s : -s;
+        const ops = node.operands.map(function (n) { return withSign(n, s); });
+        const term = ops[ops.length - 1];
+        const signed = sign > 0 ? term : { type: "operation", op: "neg", operands: [term] };
+        return ops.length === 2 ? { type: "operation", op: "+", operands: [ops[0], signed] } : signed;
+    }
+    const out = {};
+    Object.keys(node).forEach(function (k) { out[k] = k === "src" ? node[k] : withSign(node[k], s); });
+    return out;
+}
+
 function valueSetOf(a) {
     if (!a) return null;
     const isVar = function (n) { return n && (n.type === "variable" || n.type === "indexedVariable"); };
@@ -2192,11 +2208,12 @@ function valueSetOf(a) {
         : a.type === "relation" && a.op === "equal" && isVar(a.left) ? { v: a.left, rhs: a.right } : null;
     if (equation) {
         const v = varKey(equation.v), rhs = equation.rhs;
-        if (rhs && rhs.type === "operation" && (rhs.op === "plusMinus" || rhs.op === "minusPlus")) {
-            const c = rhs.operands.length === 2 ? rhs.operands[0] : { type: "number", value: "0" };
-            const t = rhs.operands[rhs.operands.length - 1];
-            return { variable: v, kind: "equal", form: "plusMinus",
-                values: [{ type: "operation", op: "+", operands: [c, t] }, { type: "operation", op: "+", operands: [c, neg(t)] }] };
+        /*
+         * a ± anywhere on the right (x = 4 ± 2, x = ±2 + 4, x = (1 ± √5)/2): the two values with every ± read as +,
+         * then as − (all ± of one expression take the same sign together, as in the evaluation)
+         */
+        if (rhs && usesPlusMinus(rhs) && !hasVariable(rhs)) {
+            return { variable: v, kind: "equal", form: "plusMinus", values: [withSign(rhs, 1), withSign(rhs, -1)] };
         }
         if (rhs && rhs.type === "list") return { variable: v, kind: "equal", form: "list", values: rhs.items };
         if (rhs && !usesPlusMinus(rhs) && !hasVariable(rhs)) return { variable: v, kind: "equal", form: "single", values: [rhs] };

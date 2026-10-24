@@ -93,6 +93,9 @@ let CASES = [
     { group: "Signs & relations", name: "relation chain → and", keys: "3 < x < 5", expect: "(and (less 3 x) (less x 5))" },
     { group: "Signs & relations", name: "not equal", keys: "x != 2", expect: "(notEqual x 2)" },
     { group: "Signs & relations", name: "chain =", keys: "x = 2 x", expect: "x ‖ (* 2 x)" },
+    { group: "Signs & relations", name: "= splits at the cursor: x ± 2, ← ←, =", keys: "x ± 2 ← ← =", expect: "x ‖ (plusMinus 2)" },
+    { group: "Signs & relations", name: "= splits at the cursor: 2 x + 1, ← ←, = (a leading + is dropped)", keys: "2 x + 1 ← ← =", expect: "(* 2 x) ‖ 1" },
+    { group: "Signs & relations", name: "= at the end: an empty right side", keys: "x + 1 = 3", expect: "(+ x 1) ‖ 3" },
 
     /* Tuples and sets */
     { group: "Tuples & sets", name: "tuple", keys: "( 1 , 2", expect: "tuple[1, 2]" },
@@ -140,9 +143,12 @@ let CASES = [
     { group: "Navigation", name: "→ out of exponent", keys: "x ^ 2 → → y", expect: "(* (^ x 2) y)" },
     { group: "Navigation", name: "→ out of square root", keys: "√ x → + 1", expect: "(+ sqrt(x) 1)" },
     { group: "Navigation", name: "→ out of absolute value", keys: "abs x → y", expect: "(* abs(x) y)" },
-    { group: "Navigation", name: "← from denominator into numerator", keys: "1 / 2 ← ← ← 3", expect: "(/ 13 2)" },
+    /* 2026-10-24: one press per place - a number no longer adds places that do not move the cursor (3 presses were 2) */
+    { group: "Navigation", name: "← from denominator into numerator", keys: "1 / 2 ← ← 3", expect: "(/ 13 2)" },
     { group: "Navigation", name: "digit before a number joins it", keys: "1 2 ← ← 5", expect: "512" },
-    { group: "Navigation", name: "digit at start of denominator", keys: "1 / 2 ← ← 3", expect: "(/ 1 32)" },
+    { group: "Navigation", name: "digit at start of denominator", keys: "1 / 2 ← 3", expect: "(/ 1 32)" },
+    { group: "Navigation", name: "x ± 2: two ← pass the 2 and the ±", keys: "x ± 2 ← ← y", expect: "(plusMinus (* x y) 2)" },
+    { group: "Navigation", name: "123: one ← per digit", keys: "1 2 3 ← ← 5", expect: "1523" },
     { group: "Navigation", name: "← into exponent", keys: "x ^ 2 → ← ← y", expect: "(^ x (* y 2))" },
 
     /* Delete */

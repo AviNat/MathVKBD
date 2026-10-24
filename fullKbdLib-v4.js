@@ -3,7 +3,7 @@
  * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
  */
 /*
- * MoodleMathKeyboard V4 (version 4.2.0 - MoodleMathKeyboard.version)
+ * MoodleMathKeyboard V4 (version 4.2.1 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -829,8 +829,13 @@ MoodleMathKeyboard.prototype.buildCursorMap = function () {
             return;
         }
 
+        /*
+         * A number: only the places between its digits (2026-10-24). Before and after it are the sequence's places -
+         * listing them twice made an arrow key "stop" without moving (two extra presses per number: x ± 2 ← ← stayed
+         * before the 2).
+         */
         if (node.type === "number") {
-            for (i = 0; i <= node.text.length; i += 1) {
+            for (i = 1; i < node.text.length; i += 1) {
                 map.push({
                     seqId: null,
                     offset: null,
@@ -911,6 +916,9 @@ MoodleMathKeyboard.prototype.moveCursor = function (delta) {
 
     /* A_1B_2 →: leaving the index of the last point of a vector name leaves the vector */
     let pointIndex = delta > 0 ? this.vectorPointIndexContext() : null;
+
+    /* the cursor at the start / end of a number (after typing digits) is the sequence's place there */
+    this.normalizeCursorToSequence();
 
     let map = this.buildCursorMap();
 
@@ -2286,7 +2294,12 @@ MoodleMathKeyboard.prototype.insertEquals = function () {
     let i;
     for (i = 0; i < this.editorAST.elements.length; i += 1) {
         if (this.editorAST.elements[i].id === this.cursor.seqId) {
-            let newSeq = this.makeSequence([]);
+            /*
+             * "=" splits the side at the cursor (2026-10-24): what follows the cursor becomes the new right side.
+             * x ± 2 with the cursor after x, then "=": x = ±2 (it appended an empty side after x ± 2 before).
+             */
+            let rest = this.editorAST.elements[i].items.splice(this.cursor.offset);
+            let newSeq = this.makeSequence(rest);
             this.editorAST.elements.splice(i + 1, 0, newSeq);
             this.cursor = {
                 seqId: newSeq.id,
@@ -6700,8 +6713,9 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * no button for an empty panel. 4.1.1 (2026-10-23): AC clears the unit too. 4.1.2: e and i typed on the computer
  * keyboard are the constants (as the panel keys), not variables. 4.1.3: a comma at the top level (x = 1, 5 - it was
  * dropped and the digits joined). 4.2.0: and / or keys in the Logic group, shown by config.logicNotation
- * ("symbols" ∧ ∨, "english" AND OR, "language" and/or, וגם/או, و/أو).
+ * ("symbols" ∧ ∨, "english" AND OR, "language" and/or, וגם/או, و/أو). 4.2.1: one arrow press per place (a number made two presses that did not move);
+ * "=" splits the side at the cursor.
  */
-MoodleMathKeyboard.version = "4.2.0";
+MoodleMathKeyboard.version = "4.2.1";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
