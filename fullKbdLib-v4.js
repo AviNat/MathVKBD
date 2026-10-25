@@ -969,15 +969,16 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
      * structure (cursor.order in NODE_DEFS) or after the structure, and is
      * tried there:  3/4 +  ->  3/4 + ;  ⁿ√ 3 x  ->  ∛x ;  3×10^5 π  ->  3×10^5 π.
      * If it is not accepted there either, the cursor goes back: nothing changes.
+     * In a vector's name or point index, the same for every slot: the action leaves the vector (exitVector).
      */
-    if (rule.allow.indexOf(actionType) < 0 || (rule.validate && !rule.validate(this, actionType))) {
-        if (rule.autoExit && (rule.autoExitExcept || []).indexOf(actionType) < 0) {
-            let saved = this.cursor;
+    if (rule.allow.indexOf(actionType) < 0 || (rule.validate && !rule.validate(this, actionType)) ||
+        this.vectorKeyBelongsOutside(actionType)) {
+        let saved = this.cursor;
 
-            if (this.autoExitSlot()) {
-                if (this.syntaxAllows(actionType)) return true;
-                this.cursor = saved;
-            }
+        if (this.exitVector(actionType) ||
+            rule.autoExit && (rule.autoExitExcept || []).indexOf(actionType) < 0 && this.autoExitSlot()) {
+            if (this.syntaxAllows(actionType)) return true;
+            this.cursor = saved;
         }
 
         return false;
@@ -991,6 +992,13 @@ MoodleMathKeyboard.prototype.syntaxAllows = function(actionType) {
         let seq = this.currentOrContainingSequence();
 
         if (seq && this.sequenceCharCount(seq) >= rule.maxChars) {
+            /* a full vector name (AB): the letter goes after the vector, AB⃗·C */
+            let saved = this.cursor;
+
+            if (this.exitVector(actionType)) {
+                if (this.syntaxAllows(actionType)) return true;
+                this.cursor = saved;
+            }
             return false;
         }
     }
@@ -1126,11 +1134,11 @@ MoodleMathKeyboard.prototype.insertDigit = function (digit) {
     let node;
     let seq;
 
-    let syntax = this.currentSyntax();
-
     if (!this.syntaxAllows("digit")) {
         return;
     }
+
+    let syntax = this.currentSyntax();   // after syntaxAllows: it can move the cursor out of a slot (AB⃗ then 2)
 
     if (syntax === "functionName" || syntax === "variableNamePart") {
 
@@ -1789,6 +1797,63 @@ MoodleMathKeyboard.prototype.vectorPointIndexContext = function() {
 
     return { point: slot.parent, nameSequence: pointInfo.parent, position: pointInfo.index };
 };
+/*
+ * Typing on after a vector (2026-10-25, the user): in the name of a vector or in the index of one of its points, a
+ * key the name cannot take leaves the vector and is applied after it - u⃗ + v⃗, u⃗·v⃗, u⃗ = ... with no →. In a point
+ * index + / − stays only as index arithmetic (A_{n+1}, see vectorKeyBelongsOutside). A letter after an index still
+ * starts the next point (A_1B); a letter after a full name leaves it (AB⃗·C).
+ * Only once the name / index has content, so an empty vector or index is never left behind.
+ */
+let VECTOR_KEEPS = ["subscript", "decimal", "postfix"];   // ignored in a vector, as before: not applied after it
+
+/* the vector whose name or point index holds the cursor, or null */
+MoodleMathKeyboard.prototype.enclosingVector = function() {
+    let seq = this.currentOrContainingSequence();
+    let id = seq ? seq.id : null;
+
+    while (id) {
+        let info = this.findParent(this.editorAST, id);
+        if (!info) return null;
+        if (info.parent.type === "vector") return info.parent;
+        id = info.parent.id;
+    }
+    return null;
+};
+
+/*
+ * + / − in a point index belongs after the vector, not in the index, unless it is index arithmetic: the index has a
+ * letter and no + / − yet (n+1, 2n−1). A_1 + B⃗ and A_{n+1} + B⃗ leave; a sign at the start of an index stays (A_{−1}).
+ */
+MoodleMathKeyboard.prototype.vectorKeyBelongsOutside = function(actionType) {
+    if (actionType !== "plus" && actionType !== "minus") return false;
+    if (!this.vectorPointIndexContext()) return false;
+
+    let items = this.currentOrContainingSequence().items;
+    if (!items.some(function (item) { return item.type !== "operator"; })) return false;   // a sign
+
+    let hasOperator = items.some(function (item, i) {
+        return item.type === "operator" && i > 0 && items[i - 1].type !== "operator";   // a sign does not count
+    });
+    let hasLetter = items.some(function (item) { return item.type === "variable"; });
+    return hasOperator || !hasLetter;
+};
+
+/* moves the cursor right after the enclosing vector; returns true when it moved */
+MoodleMathKeyboard.prototype.exitVector = function(actionType) {
+    if (VECTOR_KEEPS.indexOf(actionType) >= 0) return false;
+
+    let vector = this.enclosingVector();
+    if (!vector) return false;
+
+    let seq = this.currentOrContainingSequence();
+    if (!seq.items.some(function (item) { return item.type !== "operator"; })) return false;
+
+    let outer = this.findParent(this.editorAST, vector.id);
+    if (!outer || outer.parent.type !== "sequence" || outer.key !== "items") return false;
+
+    this.cursor = { seqId: outer.parent.id, offset: outer.index + 1, textNodeId: null, charOffset: null };
+    return true;
+};
 MoodleMathKeyboard.prototype.insertNamedFunction = function() {
     this.exitIndexedVariableSubscript();
 
@@ -2290,6 +2355,8 @@ MoodleMathKeyboard.prototype.cursorAtRootElement = function () {
 MoodleMathKeyboard.prototype.insertEquals = function () {
     if (!this.config.enableEquals) return;
     if (!this.normalizeCursorToSequence()) return;
+    let saved = this.cursor;
+    if (this.exitVector("equals") && !this.cursorAtRootElement()) this.cursor = saved;   // u⃗ = ...
     if (!this.cursorAtRootElement()) return;
     let i;
     for (i = 0; i < this.editorAST.elements.length; i += 1) {
@@ -3739,6 +3806,7 @@ MoodleMathKeyboard.prototype.init = function () {
     this.keyboardToggleButton.style.cursor = "pointer";
     this.keyboardToggleButton.style.fontSize = "20px";
 
+    this.keyboardToggleButton.onmousedown = function(event) { event.preventDefault(); };   // no focus (see the keys)
     this.keyboardToggleButton.onclick = function(event) {
         event.stopPropagation();
         self.showKeyboard();
@@ -3810,6 +3878,13 @@ MoodleMathKeyboard.prototype.init = function () {
     this.popup.onclick = function(event) {
         event.stopPropagation();
     };
+    /*
+     * A key does not take the focus when clicked (2026-10-25, the user): a focused key looked selected, and Enter /
+     * Space would press it again. The click still runs; Tab can still reach the keys.
+     */
+    this.popup.addEventListener("mousedown", function(event) {
+        if (event.target.closest && event.target.closest("button")) event.preventDefault();
+    });
     this.root.appendChild(this.popup);
 
     let self = this;
@@ -3920,7 +3995,7 @@ MoodleMathKeyboard.prototype.renderWhenMathJaxReady = function () {
 let PANEL_DEFINITIONS = {
     variables: { title: "Variables / constants", persistent: true },
     functions: { title: "Functions", persistent: true },
-    structures: { title: "Structures", persistent: false },
+    structures: { title: "Structures", persistent: true },   // stays open with other panels; major keys close it
     symbols: { title: "Symbols", persistent: true },
     units: { title: "Units", persistent: false }
 };
@@ -4257,6 +4332,11 @@ MoodleMathKeyboard.prototype.buildFunctionsPanel = function (body) {
         });
     }
 };
+/*
+ * Two groups, no titles (2026-10-25, the user): the major constructs - usually once in an answer, so the panel closes
+ * after the key (and the derivatives, which leave it open as before) - then the minor ones - often several times in
+ * one answer, so the panel stays open. A thin line between the groups when both have keys.
+ */
 MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
     let self = this;
     let btnCount = 0;
@@ -4268,11 +4348,12 @@ MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
         btnCount++;
 
     }
-    
-    if (this.config.structures.absoluteValue) {
+
+    /* major constructs */
+    if (this.config.structures.limit) {
         checkRow();
-        this.makeButton(row, "\\left|x\\right|", "Absolute value", function () {
-            self.insertAbsolute();
+        this.makeButton(row, "\\lim", "Limit", function () {
+            self.insertLimit();
             self.closePanel("structures");
         });
     }
@@ -4304,36 +4385,6 @@ MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
             self.closePanel("structures");
         });
     }
-    if (this.config.structures.limit) {
-        checkRow();
-        this.makeButton(row, "\\lim", "Limit", function () {
-            self.insertLimit();
-            self.closePanel("structures");
-        });
-    }
-    let vectorNotation = this.config.structures.vector === true ? "arrow" : this.config.structures.vector;
-
-    if (vectorNotation === "arrow" || vectorNotation === "both") {
-        checkRow();
-        this.makeButton(row, "\\vec{u}", "Vector (arrow)", function() {
-            self.insertVector("arrow");
-            self.closePanel("structures");
-        });
-    }
-    if (vectorNotation === "underline" || vectorNotation === "both") {
-        checkRow();
-        this.makeButton(row, "\\underline{u}", "Vector (underline)", function() {
-            self.insertVector("underline");
-            self.closePanel("structures");
-        });
-    }
-    if (this.config.complexNumbers) {
-        checkRow();
-        this.makeButton(row, "\\bar{x}", "Conjugate", function() {
-            self.insertConjugate();
-            self.closePanel("structures");
-        });
-    } 
     if (this.config.structures.derivative) {
         checkRow();
         this.makeButton(row, "\\frac{d}{dx}", "Derivative", function() {
@@ -4349,7 +4400,44 @@ MoodleMathKeyboard.prototype.buildStructuresPanel = function (body) {
            // self.closePanel("structures");
         });
     }
-    
+
+    /* minor constructs: a new row, the panel stays open */
+    let majorCount = btnCount;
+    btnCount = 0;
+    function checkMinorRow() {
+        let first = btnCount === 0;
+        checkRow();
+        if (first && majorCount > 0) {
+            row.style.borderTop = "1px solid #ccc";
+            row.style.paddingTop = "4px";
+        }
+    }
+    let vectorNotation = this.config.structures.vector === true ? "arrow" : this.config.structures.vector;
+
+    if (vectorNotation === "arrow" || vectorNotation === "both") {
+        checkMinorRow();
+        this.makeButton(row, "\\vec{u}", "Vector (arrow)", function() {
+            self.insertVector("arrow");
+        });
+    }
+    if (vectorNotation === "underline" || vectorNotation === "both") {
+        checkMinorRow();
+        this.makeButton(row, "\\underline{u}", "Vector (underline)", function() {
+            self.insertVector("underline");
+        });
+    }
+    if (this.config.structures.absoluteValue) {
+        checkMinorRow();
+        this.makeButton(row, "\\left|x\\right|", "Absolute value", function () {
+            self.insertAbsolute();
+        });
+    }
+    if (this.config.complexNumbers) {
+        checkMinorRow();
+        this.makeButton(row, "\\bar{x}", "Conjugate", function() {
+            self.insertConjugate();
+        });
+    }
 };
 MoodleMathKeyboard.prototype.makeClearUnitButton = function(parent) {
     let self = this;
@@ -5127,6 +5215,21 @@ let NODE_DEFS = {
         },
 
         render: function(kbd, node, editing) {
+            let seq = node.name.variable;
+            let point = seq.items[0];
+
+            /*
+             * u_{n+1}: the arrow (underline) over the letter only, the index after it - \vec{u}_{n+1}, not a short arrow
+             * over the middle of u_{n+1} (2026-10-25, the user). The cursor places of the name kept: before u, after the index.
+             */
+            if (seq.items.length === 1 && point.type === "indexedVariable" && !node.name.subscript) {
+                let cursor = function (offset) { return editing ? kbd.cursorLatexForSequence(seq, offset) : ""; };
+                let mark = node.notation === "underline" ? "\\underline{" : "\\vec{";
+
+                return mark + cursor(0) + kbd.renderNode(point.variable, editing) + "}" +
+                    "_{\\scriptscriptstyle " + kbd.renderSequence(point.subscript, editing, !editing) + "}" + cursor(1);
+            }
+
             let name = kbd.renderNode(node.name, editing);
 
             if (node.notation === "underline") return "\\underline{" + name + "}";
@@ -6714,8 +6817,12 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * keyboard are the constants (as the panel keys), not variables. 4.1.3: a comma at the top level (x = 1, 5 - it was
  * dropped and the digits joined). 4.2.0: and / or keys in the Logic group, shown by config.logicNotation
  * ("symbols" ∧ ∨, "english" AND OR, "language" and/or, וגם/או, و/أو). 4.2.1: one arrow press per place (a number made two presses that did not move);
- * "=" splits the side at the cursor.
+ * "=" splits the side at the cursor. 4.2.2 (2026-10-25): the structures panel in two groups - major (lim, ∫, F|ₐᵇ, Σ, Π,
+ * derivatives) and minor (vectors, |x|, conjugate: the panel stays open after them). 4.2.3: a clicked key does not
+ * keep the focus (it looked selected). 4.2.4: a key a vector's name cannot take leaves the vector (u⃗ + v⃗ with no →;
+ * in a point index + / − stays only as index arithmetic: A_1 + B⃗, A_{n+1} + B⃗); the structures panel stays open when
+ * another panel opens. 4.2.5: a one-point vector with an index has the arrow over the letter only: \vec{u}_{n+1}.
  */
-MoodleMathKeyboard.version = "4.2.1";
+MoodleMathKeyboard.version = "4.2.5";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
