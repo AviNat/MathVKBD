@@ -744,6 +744,10 @@ MoodleMathKeyboard.prototype.makeVariable = function(def, typed) {
         allowDigitSuffix: typed === true
     };
 };
+/* a variable's LaTeX: its name, or its LaTeX command (\alpha) in braces */
+MoodleMathKeyboard.prototype.identifierLatex = function (name, latex) {
+    return latex && latex.charAt(0) === "\\" ? "{" + latex + "}" : (name || "");
+};
 MoodleMathKeyboard.prototype.makeConstant = function (name, latex) {
     return {
         id: this.newId(),
@@ -1326,7 +1330,8 @@ MoodleMathKeyboard.prototype.insertVariable = function(def, typed) {
         if (this.insertIntoSequence({
             id: this.newId(),
             type: "identifierChar",
-            text: def.id
+            text: def.id,
+            latex: def.latex
         })) {
             this.changed();
             this.advanceIfNeeded();
@@ -4871,7 +4876,7 @@ let NODE_DEFS = {
     },
 
     identifierChar: {
-        renderProperty: "text",
+        render: function(kbd, node) { return kbd.identifierLatex(node.text, node.latex); },
 
         semantic: {
             type: "identifierChar",
@@ -4881,7 +4886,8 @@ let NODE_DEFS = {
         }
     },
     variable: {
-        render: function(kbd, node) { return node.name; },
+        /* a Greek variable (latex \Psi) shows as the letter; braces keep \psi x from reading as \psix */
+        render: function(kbd, node) { return kbd.identifierLatex(node.name, node.latex); },
 
         semantic: {
             type: "variable",
@@ -6822,7 +6828,8 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * keep the focus (it looked selected). 4.2.4: a key a vector's name cannot take leaves the vector (u⃗ + v⃗ with no →;
  * in a point index + / − stays only as index arithmetic: A_1 + B⃗, A_{n+1} + B⃗); the structures panel stays open when
  * another panel opens. 4.2.5: a one-point vector with an index has the arrow over the letter only: \vec{u}_{n+1}.
+ * 4.2.6: a variable with a LaTeX command (latex: "\\Psi") shows as the symbol, not as its name.
  */
-MoodleMathKeyboard.version = "4.2.5";
+MoodleMathKeyboard.version = "4.2.6";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();

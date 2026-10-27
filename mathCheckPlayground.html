@@ -102,6 +102,18 @@ main[hidden] { display: none; }
 .dirty { color: #b54708; font-weight: 600; font-size: 12px; }
 #fileSummary td:first-child { font-weight: 600; white-space: nowrap; width: 150px; }
 #packageJson { height: 260px; }
+/* the Greek letters list next to the variables field */
+.greek-field { position: relative; display: flex; gap: 6px; flex: 1 1 100%; }
+.greek-btn { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; white-space: nowrap; }
+.greek-pop { position: absolute; top: 100%; right: 0; z-index: 50; margin-top: 4px; padding: 6px; background: #fff;
+             border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+             display: grid; grid-template-columns: repeat(11, 30px); gap: 3px; }
+.greek-pop[hidden] { display: none; }
+.greek-pop button { font: 16px "Cambria Math", "Times New Roman", serif; height: 30px; padding: 0; border: 1px solid var(--line);
+                    border-radius: 5px; background: #fff; cursor: pointer; }
+.greek-pop button:hover { border-color: var(--accent); }
+.greek-pop button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (max-width: 480px) { .greek-pop { grid-template-columns: repeat(7, 30px); } }
 </style>
 </head>
 <body>
@@ -535,7 +547,7 @@ const KB_GROUPS = [
         { path: "fixedCalculusVariable", label: "Fixed variable of d/dx", type: "text", placeholder: "x" }
     ] },
     { title: "Variables", fields: [
-        { path: "variables", label: "Variables (comma separated; Greek by name: alpha, theta…)", type: "text", wide: true, placeholder: "x, y" },
+        { path: "variables", label: "Variables (comma separated; Greek: the α button, or by name: alpha, Psi…)", type: "text", wide: true, placeholder: "x, y", greek: true },
         { path: "acceptLowercaseVariables", label: "Any lowercase letter typed", type: "check" },
         { path: "acceptUppercaseVariables", label: "Any uppercase letter typed", type: "check" }
     ] },
@@ -609,6 +621,12 @@ $("kbForm").innerHTML = KB_GROUPS.map(function (g) {
         if (f.type === "check") return "<label class='check'><input type='checkbox' data-kb='" + f.path + "'> " + f.label + "</label>";
         else if (f.type === "select") input = "<select data-kb='" + f.path + "'>" + f.options.map(function (o) { return "<option>" + o + "</option>"; }).join("") + "</select>";
         else input = "<input type='text' data-kb='" + f.path + "' placeholder='" + (f.placeholder || "") + "'" + (f.wide ? " style='width:100%'" : " size='6'") + ">";
+        /* the Greek letters: a button next to the field opens a list to pick from (no guessing how Psi is spelled) */
+        if (f.greek) {
+            input = "<span class='greek-field'>" + input.replace("width:100%", "flex:1;min-width:0") +
+                "<button type='button' class='greek-btn' data-greek-for='" + f.path + "' aria-haspopup='true' aria-expanded='false' " +
+                "title='Add a Greek letter'>α β γ ▾</button><div class='greek-pop' role='dialog' aria-label='Greek letters' hidden></div></span>";
+        }
         return f.wide ? "<label style='grid-column:1/-1;flex-wrap:wrap'>" + f.label + " " + input + "</label>"
             : "<label>" + f.label + " " + input + "</label>";
     }).join("") + "</div></fieldset>";
@@ -636,8 +654,56 @@ function writeKbForm(s) {
 }
 
 /* "x, y, alpha" -> the keyboard's variables */
-const GREEK = { alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", theta: "θ", lambda: "λ", mu: "μ",
-    sigma: "σ", tau: "τ", phi: "φ", omega: "ω", rho: "ρ", nu: "ν" };
+/*
+ * The Greek letters a variable can be, by their LaTeX name. No pi (the constant π) and no omicron (it is an o).
+ * Capitals only where they differ from a Latin letter (no Alpha = A).
+ */
+const GREEK = {
+    alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", zeta: "ζ", eta: "η", theta: "θ", iota: "ι",
+    kappa: "κ", lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", rho: "ρ", sigma: "σ", tau: "τ", upsilon: "υ", phi: "φ",
+    chi: "χ", psi: "ψ", omega: "ω",
+    Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π", Sigma: "Σ", Upsilon: "Υ", Phi: "Φ",
+    Psi: "Ψ", Omega: "Ω"
+};
+
+/* the list of the α button: a click adds the letter to the variables (or takes it out when it is there) */
+document.querySelectorAll(".greek-btn").forEach(function (button) {
+    const field = document.querySelector("input[data-kb='" + button.dataset.greekFor + "']");
+    const pop = button.nextElementSibling;
+    const names = function () { return field.value.split(/[,\s]+/).filter(Boolean); };
+
+    pop.innerHTML = Object.keys(GREEK).map(function (name) {
+        return "<button type='button' data-letter='" + name + "' title='" + name + "'>" + GREEK[name] + "</button>";
+    }).join("");
+
+    function mark() {
+        const used = names();
+        pop.querySelectorAll("[data-letter]").forEach(function (b) {
+            b.setAttribute("aria-pressed", used.indexOf(b.dataset.letter) >= 0 ? "true" : "false");
+        });
+    }
+    function show(open) {
+        pop.hidden = !open;
+        button.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) mark();
+    }
+
+    /* inside a <label>: a click would also focus the field - keep it on the button / list */
+    button.addEventListener("click", function (e) { e.preventDefault(); show(pop.hidden); });
+    pop.addEventListener("click", function (e) {
+        e.preventDefault();
+        const b = e.target.closest("[data-letter]");
+        if (!b) return;
+        const used = names(), at = used.indexOf(b.dataset.letter);
+        if (at >= 0) used.splice(at, 1); else used.push(b.dataset.letter);
+        field.value = used.join(", ");
+        field.dispatchEvent(new Event("input", { bubbles: true }));   // the keyboard is rebuilt as when typed
+        mark();
+    });
+    field.addEventListener("input", function () { if (!pop.hidden) mark(); });
+    document.addEventListener("click", function (e) { if (!button.parentNode.contains(e.target)) show(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !pop.hidden) { show(false); button.focus(); } });
+});
 function parseVariables(text) {
     return String(text || "").split(/[,\s]+/).filter(Boolean).map(function (v) {
         return GREEK[v] ? { id: v, label: GREEK[v], latex: "\\" + v } : { id: v, label: v, latex: v };
