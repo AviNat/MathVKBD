@@ -165,7 +165,19 @@ function runQuestion(host, cfg, adapter) {
     if (saved && saved.unit && saved.unit.value) keyboard.selectUnit(saved.unit);
     restoring = false;
 
-    if (!review) return { keyboard: keyboard, check: function () { return check(keyboard); } };
+    if (!review) {
+        /*
+         * The computer keyboard reaches the keyboard only when the focus is in this document and not in a text field
+         * (handlePhysicalKey ignores those). The ⌨ button and the keys cancel mousedown so as not to take the focus -
+         * in a STACK frame the key presses then went to the Moodle page (2026-10-29). A press on the question takes it.
+         */
+        host.addEventListener("pointerdown", function () {
+            if (!document.hasFocus()) global.focus();
+            const a = document.activeElement;
+            if (a && !host.contains(a) && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) a.blur();
+        }, true);
+        return { keyboard: keyboard, check: function () { return check(keyboard); } };
+    }
 
     /*
      * The review: the answer read-only, then what cfg.review switches on - the grade (the feedback's first line),
