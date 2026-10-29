@@ -24,7 +24,8 @@ const LIBRARIES = [
     { name: "MathJax", local: "mathjax/tex-svg.js", remote: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" },
     { name: "fullKbdLib-v4", local: "fullKbdLib-v4.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/fullKbdLib-v4.js" },
     { name: "kbdTests", local: "kbdTests.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/kbdTests.js" },
-    { name: "mathCheck", local: "mathCheck.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js" }
+    { name: "mathCheck", local: "mathCheck.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathCheck.js" },
+    { name: "mathQuestion", local: "mathQuestion.js", remote: "https://raw.githack.com/AviNat/MathVKBD/main/mathQuestion.js" }
 ];
 const LOADED_FROM = {};
 function loadScript(src) {
@@ -131,6 +132,7 @@ main[hidden] { display: none; }
   <button type="button" role="tab" id="tabBtnKeyboard" aria-selected="false" aria-controls="tabKeyboard">1. Keyboard</button>
   <button type="button" role="tab" id="tabBtnChecker" aria-selected="true" aria-controls="tabChecker">2. Checker</button>
   <button type="button" role="tab" id="tabBtnFile" aria-selected="false" aria-controls="tabFile">3. Exercise file</button>
+  <button type="button" role="tab" id="tabBtnQuestion" aria-selected="false" aria-controls="tabQuestion">4. Question code</button>
   <span class="tab-note"><span id="dirtyMark" class="dirty"></span> <span id="kbSummary"></span></span>
 </nav>
 
@@ -149,7 +151,7 @@ main[hidden] { display: none; }
       <button type="button" id="saveAsBtn">Save as…</button>
       <span id="fileName">(new exercise)</span>
       <span id="fileDirty" class="dirty"></span>
-      <input type="file" id="fileInput" accept=".mchk,.json" hidden>
+      <input type="file" id="fileInput" accept=".mchk,.json,.txt,.html" hidden>
     </div>
     <table id="fileSummary"></table>
   </section>
@@ -161,6 +163,52 @@ main[hidden] { display: none; }
       submit call <code>MathCheck.compare(keyboard.getAST(), reference, rules, rubric, { language })</code>.
       The <code>playground</code> part is only for opening the file here again.</div>
     <textarea id="packageJson" readonly spellcheck="false"></textarea>
+  </section>
+</main>
+
+<!-- 4. the question code: the exercise as a Moodle STACK question (STACK-JS) or a stand-alone page (mathQuestion.js) -->
+<main id="tabQuestion" role="tabpanel" hidden>
+  <section>
+    <h2>Question settings</h2>
+    <div class="hint">The code of a question made from this exercise (tabs 1-2). All the student-side code is in the
+      library <code>mathQuestion.js</code>; the code holds only the configuration. Save the exercise file too (tab 3) -
+      or open this code again with <i>Open…</i>: it contains the whole exercise.</div>
+    <div class="grid" style="margin-top:8px">
+      <label class="check" style="grid-column:1/-1"><input type="radio" name="qTarget" value="stack" checked> Moodle STACK question (STACK-JS)</label>
+      <label class="check" style="grid-column:1/-1"><input type="radio" name="qTarget" value="html"> Stand-alone page (any website or system)</label>
+      <label>Question name <input type="text" id="qId" size="16" value="question1"></label>
+      <label title="system: the language Moodle shows the page in, so one copy of the question serves all languages">Student language
+        <select id="qLanguage"><option value="exercise">the feedback language (top right)</option><option value="system">system: the page's language</option></select></label>
+      <label class="check"><input type="checkbox" id="qReviewGrade" checked> Review: the grade</label>
+      <label class="check"><input type="checkbox" id="qReviewFeedback" checked> Review: the feedback</label>
+      <label class="check"><input type="checkbox" id="qReviewReference" checked> Review: the reference answer</label>
+      <label class="q-stack" title="Numerical input: the score 0 to 1">Score input <input type="text" id="qScoreInput" size="6" value="ans1"></label>
+      <label class="q-stack" title="String input: the saved answer and its feedback">State input <input type="text" id="qStateInput" size="6" value="ans2"></label>
+      <label style="grid-column:1/-1;flex-wrap:wrap">Library folder (fullKbdLib-v4.js, mathCheck.js, mathQuestion.js)
+        <input type="text" id="qLibrary" style="width:100%" value="https://raw.githack.com/AviNat/MathVKBD/main/"></label>
+    </div>
+  </section>
+  <section>
+    <h2>Try it</h2>
+    <div class="hint">The question as the student gets it, with the library's own code. <i>Submit</i> shows the review page
+      (the review options on the left); in STACK the review is the page after Moodle's Check / Submit.</div>
+    <div id="qTryHost" style="margin-top:8px"></div>
+    <div style="margin-top:8px"><button type="button" id="qSubmit">Submit</button> <button type="button" id="qAgain" hidden>Try again</button></div>
+    <h3>Saved state (the state input)</h3>
+    <textarea id="qTryState" readonly spellcheck="false" style="height:70px"></textarea>
+  </section>
+  <section class="wide">
+    <h2>Code
+      <button type="button" id="copyQCode" style="margin-inline-start:10px">Copy</button>
+      <button type="button" id="saveQCode">Save…</button>
+      <span id="copyQCodeMsg" class="hint"></span></h2>
+    <div class="hint" id="qCodeHint"></div>
+    <textarea id="qCode" readonly spellcheck="false" style="height:160px"></textarea>
+    <div id="qCodeError" style="color:var(--bad)"></div>
+  </section>
+  <section class="wide q-stack">
+    <h2>Setting up the STACK question</h2>
+    <div class="hint" id="qStackHelp"></div>
   </section>
 </main>
 
@@ -823,21 +871,27 @@ $("copyKb").addEventListener("click", function () { copyFrom("kbCode", "copyKbMs
 
 /* the tabs (the one shown is remembered) */
 function showTab(name) {
-    if (["keyboard", "checker", "file"].indexOf(name) < 0) name = "checker";
+    if (["keyboard", "checker", "file", "question"].indexOf(name) < 0) name = "checker";
     $("tabKeyboard").hidden = name !== "keyboard";
     $("tabChecker").hidden = name !== "checker";
     $("tabFile").hidden = name !== "file";
+    $("tabQuestion").hidden = name !== "question";
     $("tabBtnKeyboard").setAttribute("aria-selected", String(name === "keyboard"));
     $("tabBtnChecker").setAttribute("aria-selected", String(name === "checker"));
     $("tabBtnFile").setAttribute("aria-selected", String(name === "file"));
+    $("tabBtnQuestion").setAttribute("aria-selected", String(name === "question"));
+    /* the try keyboard takes the computer keyboard of the whole page: only while its tab is shown */
+    if (name !== "question") stopTry();
     if (name === "keyboard") { if (!keyboards.kbPreviewHost) rebuild("kbPreviewHost"); setActive("kbPreviewHost"); }
     else if (name === "checker") { refreshChecker(); setActive("stuHost"); }
+    else if (name === "question") { refreshChecker(); active = null; showQuestionTab(); }
     else { refreshChecker(); active = null; showFileTab(); }
     try { localStorage.setItem("mathCheckPlayground.tab", name); } catch (e) { /* storage blocked */ }
 }
 $("tabBtnKeyboard").addEventListener("click", function () { showTab("keyboard"); });
 $("tabBtnChecker").addEventListener("click", function () { showTab("checker"); });
 $("tabBtnFile").addEventListener("click", function () { showTab("file"); });
+$("tabBtnQuestion").addEventListener("click", function () { showTab("question"); });
 
 /* ============================================================
    3. THE EXERCISE FILE - keyboard + reference answer + rules + rubric in one JSON file (open / save as in the
@@ -865,6 +919,7 @@ function exercisePackage() {
         referenceUnit: keyboards.refHost.getUnit() || null,       // the reference's unit (getUnit()), null: none asked
         rules: withoutDefaults(readRules(), MathCheck.defaults.rules),
         rubric: rubric,
+        question: readQuestionSettings(),                           // tab 4: the question code's settings
         playground: {
             keyboardSettings: KB,
             referenceEditor: keyboards.refHost.getEditorAST(),
@@ -976,6 +1031,7 @@ function loadPackage(pkg, name, handle) {
         rubricToUi(Object.assign({}, MathCheck.defaults.rubric, pkg.rubric || {}));
         syncRubricJson();
         if (pkg.language) $("language").value = pkg.language;
+        writeQuestionSettings(pkg.question);
     } finally {
         loading = false;
     }
@@ -1025,6 +1081,7 @@ function newExercise() {
         rubricToUi(MathCheck.defaults.rubric);
         syncRubricJson();
         $("language").value = "en";
+        writeQuestionSettings({});
     } finally {
         loading = false;
     }
@@ -1060,7 +1117,9 @@ async function openFile() {
     if (!confirmDiscard()) return;
     if (window.showOpenFilePicker) {
         try {
-            const handles = await window.showOpenFilePicker({ types: [{ description: "mathCheck exercise", accept: { "application/json": [FILE_EXTENSION, ".json"] } }] });
+            const handles = await window.showOpenFilePicker({ types: [
+                { description: "mathCheck exercise", accept: { "application/json": [FILE_EXTENSION, ".json"] } },
+                { description: "Question code (STACK or web page)", accept: { "text/plain": [".txt"], "text/html": [".html"] } }] });
             const file = await handles[0].getFile();
             openText(await file.text(), file.name, handles[0]);
         } catch (e) { if (e.name !== "AbortError") window.alert(e.message); }
@@ -1070,7 +1129,12 @@ async function openFile() {
     $("fileInput").click();
 }
 function openText(text, name, handle) {
-    try { loadPackage(JSON.parse(text), name, handle); }
+    try {
+        /* the code of tab 4 (STACK text or a page) holds the whole exercise: opened as a new exercise file */
+        const fromCode = /^\s*\{/.test(text) ? null : questionFromCode(text);
+        if (fromCode) loadPackage(fromCode, String(name || "exercise").replace(/(\.stack)?\.(txt|html?)$/i, "") + FILE_EXTENSION, null);
+        else loadPackage(JSON.parse(text), name, handle);
+    }
     catch (e) { window.alert("Could not open the file: " + e.message); }
 }
 $("fileInput").addEventListener("change", function () {
@@ -1114,6 +1178,266 @@ $("saveBtn").addEventListener("click", function () { saveFile(false); });
 $("saveAsBtn").addEventListener("click", function () { saveFile(true); });
 $("copyPackage").addEventListener("click", function () { copyFrom("packageJson", "copyPackageMsg"); });
 
+/* ============================================================
+   4. THE QUESTION CODE - the exercise as a Moodle STACK question (STACK-JS) or a stand-alone page. All the
+   student-side code is in mathQuestion.js; here only the configuration and a fixed template, as in the chemistry
+   builder (chemistryLib/STACKJS-DESIGN.md). The configuration holds the whole exercise package, so the code opens here
+   again (Open… in tab 3).
+   ============================================================ */
+const QUESTION_TOOL = "mathCheck-question";
+/* written into the code's first comment, to see which template a question has - change it when the template changes */
+const QUESTION_CODE_VERSION = "2026-10-29.1 STACK-JS";
+const QUESTION_DEFAULTS = {
+    target: "stack", questionId: "question1", language: "exercise",
+    review: { grade: true, feedback: true, reference: true },
+    inputs: { score: "ans1", state: "ans2" },
+    libraryUrl: "https://raw.githack.com/AviNat/MathVKBD/main/"
+};
+
+function readQuestionSettings() {
+    const target = document.querySelector("input[name=qTarget]:checked");
+    return {
+        target: target ? target.value : "stack",
+        /* it goes into an HTML comment and a title: no < > & " and no -- */
+        questionId: $("qId").value.trim().replace(/[<>&"\[\]{}]/g, "").replace(/-{2,}/g, "-") || "question1",
+        language: $("qLanguage").value,
+        review: { grade: $("qReviewGrade").checked, feedback: $("qReviewFeedback").checked, reference: $("qReviewReference").checked },
+        inputs: { score: $("qScoreInput").value.trim(), state: $("qStateInput").value.trim() },
+        libraryUrl: $("qLibrary").value.trim() || QUESTION_DEFAULTS.libraryUrl
+    };
+}
+function writeQuestionSettings(q) {
+    q = deepMerge(QUESTION_DEFAULTS, q || {});
+    document.querySelectorAll("input[name=qTarget]").forEach(function (r) { r.checked = r.value === q.target; });
+    $("qId").value = q.questionId;
+    $("qLanguage").value = q.language === "system" ? "system" : "exercise";
+    $("qReviewGrade").checked = q.review.grade !== false;
+    $("qReviewFeedback").checked = q.review.feedback !== false;
+    $("qReviewReference").checked = q.review.reference !== false;
+    $("qScoreInput").value = q.inputs.score;
+    $("qStateInput").value = q.inputs.state;
+    $("qLibrary").value = q.libraryUrl;
+}
+function libraryFile(q, name) { return q.libraryUrl.replace(/\/*$/, "/") + name; }
+
+/* what mathQuestion.js reads: the settings and the exercise (the package without the question settings) */
+function questionConfig(q) {
+    const pkg = exercisePackage();
+    delete pkg.question;
+    return {
+        tool: QUESTION_TOOL, formatVersion: 1, target: q.target, questionId: q.questionId,
+        language: q.language, review: q.review, inputs: q.inputs, exercise: pkg
+    };
+}
+
+/*
+ * The STACK question text: the inputs, hidden (the frame cannot hide them), and an [[iframe]] that loads the libraries
+ * and starts the question. The JSON is inside STACK's CASText: "[[", "{@" and "{#" would start a STACK block or an
+ * expression, and Moodle may escape < > & - inside strings they are \u escapes (JSON.parse restores them). One line:
+ * an editor's auto-format may turn line breaks into <br />, also inside the script.
+ */
+function stackCode(q, cfg) {
+    const json = JSON.stringify(cfg)
+        .replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
+        .replace(/\[\[/g, "[\\u005b").replace(/\]\]/g, "]\\u005d").replace(/\{@/g, "{\\u0040").replace(/\{#/g, "{\\u0023");
+    const inputs = [q.inputs.score, q.inputs.state].filter(Boolean)
+        .map(function (n) { return "[[input:" + n + "]] [[validation:" + n + "]]"; }).join(" ");
+    return [
+        "<!-- Math keyboard question \"" + q.questionId + "\" (code version " + QUESTION_CODE_VERSION + "). Made with the mathCheck playground: to change it, open this code (or the exercise file) in the playground. Do not edit by hand. -->",
+        inputs ? "<div style=\"display:none\">" + inputs + "</div>" : "",
+        "[[iframe width=\"100%\" height=\"90px\" scrolling=\"false\" title=\"Math keyboard\"]]",
+        "[[script src=\"" + libraryFile(q, "fullKbdLib-v4.js") + "\"/]]",
+        "[[script src=\"" + libraryFile(q, "mathCheck.js") + "\"/]]",
+        "[[script src=\"" + libraryFile(q, "mathQuestion.js") + "\"/]]",
+        "<div id=\"mathq\"></div>",
+        "[[script type=\"module\"]]",
+        "import {stack_js} from '[[cors src=\"stackjsiframe.js\"/]]';",
+        "MathQuestion.mountStackJs(stack_js," + json + ");",
+        "[[/script]]",
+        "[[/iframe]]"
+    ].join("");
+}
+
+/* a stand-alone page: the keyboard with Submit / Try again, and in a comment how to connect it to another system */
+function htmlCode(q, cfg) {
+    const json = JSON.stringify(cfg).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+    const lang = cfg.exercise.language || "en";
+    return [
+        "<!DOCTYPE html>",
+        "<html lang=\"" + lang + "\" dir=\"" + (lang === "en" ? "ltr" : "rtl") + "\">",
+        "<head>",
+        "<meta charset=\"utf-8\">",
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "<title>" + esc(q.questionId) + "</title>",
+        "<!-- Math keyboard question \"" + q.questionId + "\" (code version " + QUESTION_CODE_VERSION + ", stand-alone page). Made with the mathCheck playground: to change the question, open this file in the playground. -->",
+        "<script>window.MathJax = { loader: { load: [\"[tex]/html\"] }, tex: { packages: { \"[+]\": [\"html\"] }, inlineMath: [[\"\\\\(\", \"\\\\)\"]] }, svg: { fontCache: \"global\" } };<\/script>",
+        "<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js\"><\/script>",
+        "<script src=\"" + esc(libraryFile(q, "fullKbdLib-v4.js")) + "\"><\/script>",
+        "<script src=\"" + esc(libraryFile(q, "mathCheck.js")) + "\"><\/script>",
+        "<script src=\"" + esc(libraryFile(q, "mathQuestion.js")) + "\"><\/script>",
+        "<style>",
+        "body{font-family:Arial,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;color:#1d2733}",
+        ".actions{margin:14px 0}",
+        ".actions button{font-size:16px;padding:6px 18px;margin-inline-end:8px;cursor:pointer}",
+        "</style>",
+        "</head>",
+        "<body>",
+        "<!-- the question text: write it here -->",
+        "<p></p>",
+        "<div id=\"question\"></div>",
+        "<div class=\"actions\"><button type=\"button\" id=\"submit\"></button><button type=\"button\" id=\"again\" hidden></button></div>",
+        "<script>",
+        "/*",
+        " * The question's configuration (made by the mathCheck playground - change it there, not here).",
+        " *",
+        " * Connecting the question to another system - MathQuestion.mount(element, CONFIG, options):",
+        " *   options.state     the saved state to start from (what onChange gave, or its JSON text), or null",
+        " *   options.readOnly  true: show the submitted answer with its grade and feedback (the review)",
+        " *   options.onChange  function (state, score) - after every change of the answer:",
+        " *                       state  {v, latex, editor, unit, grade, feedback} (null when the answer is emptied) - store it",
+        " *                       score  0 to 1 (the rubric of the question)",
+        " * The keyboard draws itself in the element; nothing else is needed.",
+        " */",
+        "var CONFIG = " + json + ";",
+        "var TEXT = {he:{submit:\"הגשה\",again:\"ניסיון נוסף\"}, ar:{submit:\"إرسال\",again:\"محاولة أخرى\"}, en:{submit:\"Submit\",again:\"Try again\"}};",
+        "var words = TEXT[document.documentElement.lang] || TEXT.en;",
+        "var box = document.getElementById(\"question\"), submit = document.getElementById(\"submit\"), again = document.getElementById(\"again\");",
+        "var saved = null, run = null;",
+        "submit.textContent = words.submit;",
+        "again.textContent = words.again;",
+        "function show(readOnly) {",
+        "  if (run) run.keyboard.destroy();",
+        "  run = MathQuestion.mount(box, CONFIG, {",
+        "    state: saved,",
+        "    readOnly: readOnly,",
+        "    onChange: function (state, score) { saved = state; }",
+        "  });",
+        "  submit.hidden = readOnly;",
+        "  again.hidden = !readOnly;",
+        "}",
+        "submit.onclick = function () { if (saved) show(true); };",
+        "again.onclick = function () { show(false); };",
+        "show(false);",
+        "<\/script>",
+        "</body>",
+        "</html>",
+        ""
+    ].join("\n");
+}
+
+/* the configuration back from a saved code: the STACK-JS template or a stand-alone page; null if neither */
+function questionFromCode(text) {
+    const m = /MathQuestion\.mountStackJs\(stack_js,(\{.*\})\);\[\[\/script\]\]/.exec(text) || /^var CONFIG = (\{.*\});$/m.exec(text);
+    if (!m) return null;
+    const cfg = JSON.parse(m[1]);
+    if (!cfg || cfg.tool !== QUESTION_TOOL || !cfg.exercise) throw new Error("This is not the code of a mathCheck question.");
+    const pkg = cfg.exercise;
+    pkg.question = { target: cfg.target, questionId: cfg.questionId, language: cfg.language, review: cfg.review, inputs: cfg.inputs };
+    return pkg;
+}
+
+/* the state input's model answer: the reference LaTeX as a Maxima string (Moodle shows it as "the correct answer") */
+function stackModelState() { return JSON.stringify(keyboards.refHost.getLatex()); }
+
+function stackHelpHtml(q) {
+    const s = esc(q.inputs.score || "ans1"), t = esc(q.inputs.state || "ans2");
+    return "<p>The code already contains the two inputs - <code>[[input:" + s + "]] [[validation:" + s + "]] [[input:" + t + "]] [[validation:" + t +
+        "]]</code> - in a hidden box. Paste it into the question text as it is (plain-text editor or the HTML source view); remove STACK's default " +
+        "<code>[[input:ans1]] [[validation:ans1]]</code> and do <b>not</b> add the inputs again. Then set each input in its section of the question form:</p>" +
+        "<table><tr><th></th><th>" + s + " - the score</th><th>" + t + " - the saved answer</th></tr>" +
+        "<tr><td>Input type</td><td>Numerical</td><td>String</td></tr>" +
+        "<tr><td>Model answer</td><td><code>1</code></td><td><code>" + esc(stackModelState()) + "</code> (with the quotes)</td></tr>" +
+        "<tr><td>Forbid float</td><td><b>No</b> (the score is a decimal)</td><td>-</td></tr>" +
+        "<tr><td>Student must verify</td><td>No</td><td>No</td></tr>" +
+        "<tr><td>Show the validation</td><td><b>No</b></td><td><b>No</b></td></tr>" +
+        "<tr><td>Extra options</td><td><code>hideanswer</code></td><td><code>hideanswer</code></td></tr></table>" +
+        "<p><b>The potential response tree (PRT).</b> " + s + " holds the score from 0 to 1 (the rubric of tab 2), and the PRT gives it as the mark: " +
+        "feedback variables <code>sc: " + s + ";</code> and one node - SAns <code>" + s + "</code>, TAns <code>1</code>, answer test <code>NumAbsolute</code> " +
+        "with the option <code>0.0001</code>; true branch: score <code>1</code>; false branch: score <code>sc</code>. " + t + " needs no PRT: STACK saves it " +
+        "and the keyboard reads it back. The feedback text is shown on the review page, inside the frame (the review options above).</p>" +
+        "<p><b>The library folder</b> must hold the three files, of matching versions. A change of a library reaches Moodle only after the push to GitHub " +
+        "(and the CDN's cache); a change of the template (the code version in the first comment) needs the code pasted again.</p>";
+}
+
+/* the try area: the question with the library's code, as the student gets it */
+let tryRun = null, tryState = null;
+function stopTry() {
+    if (tryRun) { tryRun.keyboard.destroy(); tryRun = null; }
+    $("qTryHost").textContent = "";
+}
+function startTry(readOnly) {
+    stopTry();
+    let cfg;
+    try { cfg = questionConfig(readQuestionSettings()); } catch (e) { $("qCodeError").textContent = e.message; return; }
+    try {
+        tryRun = MathQuestion.mount($("qTryHost"), cfg, {
+            state: tryState, readOnly: readOnly,
+            onChange: function (state) { tryState = state; $("qTryState").value = state ? JSON.stringify(state) : ""; }
+        });
+    } catch (e) { $("qCodeError").textContent = "The question could not start: " + e.message; return; }
+    $("qSubmit").hidden = readOnly;
+    $("qAgain").hidden = !readOnly;
+}
+
+/* the code and the help for the current settings; with restart, the try area again from an empty answer */
+function showQuestionTab(restart) {
+    const q = readQuestionSettings();
+    $("qCodeError").textContent = "";
+    document.querySelectorAll(".q-stack").forEach(function (el) { el.hidden = q.target !== "stack"; });
+    $("qCodeHint").textContent = q.target === "stack"
+        ? "Paste this into the STACK question text, in the plain-text editor or the HTML (source code) view. It already contains the STACK inputs (hidden). " +
+          "The keyboard runs in a STACK-JS frame (each question in its own frame, so several questions can share a page). The setup of the inputs and the PRT is below."
+        : "A complete web page: the question's keyboard with Submit / Try again, the grade and the feedback. Save it as an .html file and open it in a browser, " +
+          "or put it on any website; write the question text where the page says so. The comment in the page explains MathQuestion.mount, to connect it to another system.";
+    let cfg;
+    try { cfg = questionConfig(q); } catch (e) { $("qCode").value = ""; $("qCodeError").textContent = "The rubric JSON is not valid: " + e.message; return; }
+    if (!keyboards.refHost.getLatex()) $("qCodeError").textContent = "The reference answer (tab 2) is empty.";
+    if (q.target === "stack" && (!q.inputs.score || !q.inputs.state || q.inputs.score === q.inputs.state)) {
+        $("qCodeError").textContent = "The score input and the state input need two different names.";
+    }
+    $("qCode").value = q.target === "stack" ? stackCode(q, cfg) : htmlCode(q, cfg);
+    $("qStackHelp").innerHTML = stackHelpHtml(q);
+    if (restart !== false) { tryState = null; $("qTryState").value = ""; startTry(false); }
+}
+let qTimer = null;
+function questionSettingsChanged() {
+    changedByUser();
+    clearTimeout(qTimer);
+    /* the review options show in the try area at once; the rest only in the code */
+    qTimer = setTimeout(function () { showQuestionTab(false); if (tryRun && !$("qAgain").hidden) startTry(true); }, 200);
+}
+$("tabQuestion").querySelector("section").addEventListener("input", questionSettingsChanged);
+$("tabQuestion").querySelector("section").addEventListener("change", questionSettingsChanged);
+$("qSubmit").addEventListener("click", function () { startTry(true); });
+$("qAgain").addEventListener("click", function () { startTry(false); });
+$("copyQCode").addEventListener("click", function () { copyFrom("qCode", "copyQCodeMsg"); });
+
+/* Save…: the code as a file - .txt for STACK, .html for a page (the file picker where the browser has it, else a download) */
+async function saveQuestionCode() {
+    const q = readQuestionSettings(), text = $("qCode").value;
+    if (!text) return;
+    const html = q.target === "html";
+    const suggested = q.questionId.replace(/[\\\/:*?|]+/g, "-") + (html ? ".html" : ".stack.txt");
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({ suggestedName: suggested,
+                types: [html ? { description: "Web page", accept: { "text/html": [".html"] } } : { description: "Text", accept: { "text/plain": [".txt"] } }] });
+            const writable = await handle.createWritable();
+            await writable.write(text);
+            await writable.close();
+        } catch (e) { if (e.name !== "AbortError") window.alert(e.message); }
+        return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: (html ? "text/html" : "text/plain") + ";charset=utf-8" }));
+    a.download = suggested;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+$("saveQCode").addEventListener("click", saveQuestionCode);
+
 /* start (called at the end, after every declaration): the saved settings (else everything on), the checker with a
    first example: 2(x+1) and 2x+2 */
 function startUp() {
@@ -1136,7 +1460,10 @@ window.playground = {
     preset: function (name) { writeKbForm(preset(name)); keyboardChanged(); },
     check: function () { check(); },
     exercisePackage: function () { return exercisePackage(); },
-    loadPackage: function (pkg) { loadPackage(pkg, "test.json", null); }
+    loadPackage: function (pkg) { loadPackage(pkg, "test.json", null); },
+    questionCode: function () { return $("qCode").value; },
+    get tryKeyboard() { return tryRun && tryRun.keyboard; },
+    openText: function (text, name) { openText(text, name || "test.txt", null); }
 };
 setDirty(false);
 }
