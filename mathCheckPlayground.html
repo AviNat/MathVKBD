@@ -103,6 +103,11 @@ main[hidden] { display: none; }
 .dirty { color: #b54708; font-weight: 600; font-size: 12px; }
 #fileSummary td:first-child { font-weight: 600; white-space: nowrap; width: 150px; }
 #packageJson { height: 260px; }
+/* tab 4: a whole line of the settings grid, its controls side by side */
+.q-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.q-row[hidden] { display: none; }
+.q-row label.check { justify-content: flex-start; gap: 6px; }
+.q-row label.check input { margin: 0; }
 /* the Greek letters list next to the variables field */
 .greek-field { position: relative; display: flex; gap: 6px; flex: 1 1 100%; }
 .greek-btn { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; white-space: nowrap; }
@@ -179,11 +184,13 @@ main[hidden] { display: none; }
       <label>Question name <input type="text" id="qId" size="16" value="question1"></label>
       <label title="system: the language Moodle shows the page in, so one copy of the question serves all languages">Student language
         <select id="qLanguage"><option value="exercise">the feedback language (top right)</option><option value="system">system: the page's language</option></select></label>
-      <label class="check"><input type="checkbox" id="qReviewGrade" checked> Review: the grade</label>
-      <label class="check"><input type="checkbox" id="qReviewFeedback" checked> Review: the feedback</label>
-      <label class="check"><input type="checkbox" id="qReviewReference" checked> Review: the reference answer</label>
-      <label class="q-stack" title="Numerical input: the score 0 to 1">Score input <input type="text" id="qScoreInput" size="6" value="ans1"></label>
-      <label class="q-stack" title="String input: the saved answer and its feedback">State input <input type="text" id="qStateInput" size="6" value="ans2"></label>
+      <div class="q-row">Review:
+        <label class="check"><input type="checkbox" id="qReviewGrade" checked> the grade</label>
+        <label class="check"><input type="checkbox" id="qReviewFeedback" checked> the feedback</label>
+        <label class="check"><input type="checkbox" id="qReviewReference" checked> the reference answer</label></div>
+      <div class="q-row q-stack">
+        <label title="Numerical input: the score 0 to 1">Score input <input type="text" id="qScoreInput" size="6" value="ans1"></label>
+        <label title="String input: the saved answer and its feedback">State input <input type="text" id="qStateInput" size="6" value="ans2"></label></div>
       <label style="grid-column:1/-1;flex-wrap:wrap">Library folder (fullKbdLib-v4.js, mathCheck.js, mathQuestion.js)
         <input type="text" id="qLibrary" style="width:100%" value="https://raw.githack.com/AviNat/MathVKBD/main/"></label>
     </div>
