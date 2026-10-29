@@ -21,6 +21,7 @@
  *     language: "exercise" (the exercise's feedback language) | "system" (the page's language) | "en" | "he" | "ar",
  *     review: { grade, feedback, reference }    - what the review shows (each true unless false)
  *     inputs: { score: "ans1", state: "ans2" }   - the STACK inputs (STACK-JS only)
+ *     displayChars                               - the answer box's width in characters; none = the whole width
  *     mathJaxUrl                                 - STACK-JS only; default MathJax 3 from jsDelivr
  *     exercise: the playground's exercise package (.mchk): keyboard, reference, referenceUnit, rules, rubric, language }
  *
@@ -33,7 +34,7 @@
 (function (global) {
 "use strict";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const MATHJAX_URL = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
 
 const TEXT = {
@@ -159,6 +160,7 @@ function runQuestion(host, cfg, adapter) {
         }
     });
     if (cfg.language === "system") kbConfig.language = lang;      // the keyboard's tooltips too
+    if (cfg.displayChars > 0) kbConfig.displayChars = cfg.displayChars;
     const keyboard = new global.MoodleMathKeyboard(kbConfig);
 
     if (saved && saved.editor) restoreEditor(keyboard, saved.editor);

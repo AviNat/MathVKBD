@@ -184,6 +184,8 @@ main[hidden] { display: none; }
       <label>Question name <input type="text" id="qId" size="16" value="question1"></label>
       <label title="system: the language Moodle shows the page in, so one copy of the question serves all languages">Student language
         <select id="qLanguage"><option value="exercise">the feedback language (top right)</option><option value="system">system: the page's language</option></select></label>
+      <div class="q-row"><label title="About this many characters fit on one line of the answer box; longer answers scroll. Empty: the whole width of the page (or the STACK frame). Never wider than the page.">Answer box width (characters)
+        <input type="number" id="qDisplayChars" min="8" max="200" step="1" placeholder="whole width" style="width:110px"></label></div>
       <div class="q-row">Review:
         <label class="check"><input type="checkbox" id="qReviewGrade" checked> the grade</label>
         <label class="check"><input type="checkbox" id="qReviewFeedback" checked> the feedback</label>
@@ -1195,7 +1197,7 @@ const QUESTION_TOOL = "mathCheck-question";
 /* written into the code's first comment, to see which template a question has - change it when the template changes */
 const QUESTION_CODE_VERSION = "2026-10-29.1 STACK-JS";
 const QUESTION_DEFAULTS = {
-    target: "stack", questionId: "question1", language: "exercise",
+    target: "stack", questionId: "question1", language: "exercise", displayChars: 0,
     review: { grade: true, feedback: true, reference: true },
     inputs: { score: "ans1", state: "ans2" },
     libraryUrl: "https://raw.githack.com/AviNat/MathVKBD/main/"
@@ -1208,6 +1210,7 @@ function readQuestionSettings() {
         /* it goes into an HTML comment and a title: no < > & " and no -- */
         questionId: $("qId").value.trim().replace(/[<>&"\[\]{}]/g, "").replace(/-{2,}/g, "-") || "question1",
         language: $("qLanguage").value,
+        displayChars: Math.max(0, Math.round(Number($("qDisplayChars").value)) || 0),   // 0: the whole width
         review: { grade: $("qReviewGrade").checked, feedback: $("qReviewFeedback").checked, reference: $("qReviewReference").checked },
         inputs: { score: $("qScoreInput").value.trim(), state: $("qStateInput").value.trim() },
         libraryUrl: $("qLibrary").value.trim() || QUESTION_DEFAULTS.libraryUrl
@@ -1218,6 +1221,7 @@ function writeQuestionSettings(q) {
     document.querySelectorAll("input[name=qTarget]").forEach(function (r) { r.checked = r.value === q.target; });
     $("qId").value = q.questionId;
     $("qLanguage").value = q.language === "system" ? "system" : "exercise";
+    $("qDisplayChars").value = q.displayChars > 0 ? q.displayChars : "";
     $("qReviewGrade").checked = q.review.grade !== false;
     $("qReviewFeedback").checked = q.review.feedback !== false;
     $("qReviewReference").checked = q.review.reference !== false;
@@ -1231,10 +1235,12 @@ function libraryFile(q, name) { return q.libraryUrl.replace(/\/*$/, "/") + name;
 function questionConfig(q) {
     const pkg = exercisePackage();
     delete pkg.question;
-    return {
+    const cfg = {
         tool: QUESTION_TOOL, formatVersion: 1, target: q.target, questionId: q.questionId,
         language: q.language, review: q.review, inputs: q.inputs, exercise: pkg
     };
+    if (q.displayChars > 0) cfg.displayChars = q.displayChars;
+    return cfg;
 }
 
 /*
@@ -1410,8 +1416,8 @@ let qTimer = null;
 function questionSettingsChanged() {
     changedByUser();
     clearTimeout(qTimer);
-    /* the review options show in the try area at once; the rest only in the code */
-    qTimer = setTimeout(function () { showQuestionTab(false); if (tryRun && !$("qAgain").hidden) startTry(true); }, 200);
+    /* the try area again in its mode, with the same answer: the review options and the answer box width show at once */
+    qTimer = setTimeout(function () { showQuestionTab(false); if (tryRun) startTry(!$("qAgain").hidden); }, 200);
 }
 $("tabQuestion").querySelector("section").addEventListener("input", questionSettingsChanged);
 $("tabQuestion").querySelector("section").addEventListener("change", questionSettingsChanged);

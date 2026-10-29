@@ -87,6 +87,7 @@ let DEFAULT_CONFIG = {
         logic: true
     },
     unitCategories: null,   // null = all unit groups; else { length: true, time: true, ... }
+    displayChars: null,     // width of the answer box in characters; null = the container's whole width
     getValueFunc: null,
     setValueFunc: null,
     onChange: null
@@ -3780,6 +3781,8 @@ MoodleMathKeyboard.prototype.makePanel = function(name) {
 /* ============================================================
    INITIALIZATION
    ============================================================ */
+const DISPLAY_FONT_SIZE = 22, DISPLAY_CHAR_EM = 0.6, DISPLAY_MIN_CHARS = 8;
+
 MoodleMathKeyboard.prototype.init = function () {
     let host = document.getElementById(this.config.divId);
     if (!host) {
@@ -3799,6 +3802,16 @@ MoodleMathKeyboard.prototype.init = function () {
     this.displayContainer.style.alignItems = "stretch";
     this.displayContainer.style.gap = "4px";
     this.root.appendChild(this.displayContainer);
+    /*
+     * config.displayChars: the answer box holds about that many characters on one line (longer answers scroll). A
+     * character is DISPLAY_CHAR_EM of the font size (a digit or a letter at the normal level); + padding, border, the
+     * ⌨ button and the gap. Only the box: the keys popup keeps the whole width. Never wider than the container.
+     */
+    let displayChars = Math.round(Number(this.config.displayChars));
+    if (displayChars > 0) {
+        displayChars = Math.max(DISPLAY_MIN_CHARS, displayChars);
+        this.displayContainer.style.maxWidth = (Math.ceil(displayChars * DISPLAY_CHAR_EM * DISPLAY_FONT_SIZE) + 20 + 2 + 42 + 4) + "px";
+    }
 
     this.keyboardToggleButton = document.createElement("button");
     this.keyboardToggleButton.type = "button";
@@ -3828,7 +3841,7 @@ MoodleMathKeyboard.prototype.init = function () {
     this.display.style.borderRadius = "6px";
     this.display.style.padding = "8px 10px";
     this.display.style.backgroundColor = "#fff";
-    this.display.style.fontSize = "22px";
+    this.display.style.fontSize = DISPLAY_FONT_SIZE + "px";
     this.display.style.boxSizing = "border-box";
     this.display.style.overflowX = "auto";
     this.display.style.flex = "1";
@@ -6829,7 +6842,8 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * in a point index + / − stays only as index arithmetic: A_1 + B⃗, A_{n+1} + B⃗); the structures panel stays open when
  * another panel opens. 4.2.5: a one-point vector with an index has the arrow over the letter only: \vec{u}_{n+1}.
  * 4.2.6: a variable with a LaTeX command (latex: "\\Psi") shows as the symbol, not as its name.
+ * 4.2.7 (2026-10-29): config.displayChars - the answer box's width in characters (empty: the whole width).
  */
-MoodleMathKeyboard.version = "4.2.6";
+MoodleMathKeyboard.version = "4.2.7";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
