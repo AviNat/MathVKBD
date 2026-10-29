@@ -560,7 +560,8 @@ function sampleValues(exprs, ctx) {
     const complex = exprs.some(usesI);
     if (complex && pm) return { ok: false, unsupported: "± with i", rows: [] };
     const signs = pm ? [1, -1] : [1];
-    const want = Math.max(3, ctx.rules.value.samples || 8);
+    /* no variables: every point would be the same, so one value */
+    const want = vars.length ? Math.max(3, ctx.rules.value.samples || 8) : 1;
     const envs = ctx.sample(vars, want * 4);
     const rows = [];
     try {
@@ -577,7 +578,7 @@ function sampleValues(exprs, ctx) {
         if (e instanceof Unsupported) return { ok: false, unsupported: e.what, rows: [] };
         throw e;
     }
-    return { ok: rows.length >= 3, rows: rows, vars: vars, pm: pm };
+    return { ok: rows.length >= Math.min(3, want), rows: rows, vars: vars, pm: pm };
 }
 
 /* equal values at every point (± : the two values as a set) */
@@ -2308,7 +2309,7 @@ function diagnoseWrongValue(s, r, eq, ctx, add, state) {
     }
 
     const tol = rules.value.tolerance;
-    if (rules.diagnosis !== false && eq.rows && eq.rows.length >= 3 && !usesPlusMinus(s) && !usesPlusMinus(r)) {
+    if (rules.diagnosis !== false && eq.rows && eq.rows.length >= (eq.vars && eq.vars.length ? 3 : 1) && !usesPlusMinus(s) && !usesPlusMinus(r)) {
         const rows = eq.rows;                             // values: [reference, student]
         const k = constantRatio(rows, 1, 0, tol);
         /* two plain numbers always have a ratio: only a sign or a power of 10 means something there */

@@ -1217,7 +1217,10 @@ function check() {
                     (ok ? "<span class='yes'>✓</span>" : "<span class='no'>✗</span>") + "</td></tr>";
             }).join("") + solutionRows(d, vars, f);
     } else {
-        $("points").innerHTML = "<tr>" + vars.map(function (v) { return "<th>" + v + "</th>"; }).join("") +
+        /* no variables: one value, not sample points */
+        const constant = !vars.length ? "<tr><td colspan='3' class='hint'>No variables: the two values are compared once" +
+            (rows[0].complex ? " (real part / imaginary part)" : "") + ".</td></tr>" : "";
+        $("points").innerHTML = constant + "<tr>" + vars.map(function (v) { return "<th>" + v + "</th>"; }).join("") +
             "<th>reference</th><th>student</th><th>equal</th></tr>" +
             rows.map(function (row) {
                 const r = row.values[0].map(f).join(" / "), s = row.values[1].map(f).join(" / ");
