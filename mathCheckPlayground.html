@@ -218,6 +218,10 @@ main[hidden] { display: none; }
   <section class="wide q-stack">
     <h2>Setting up the STACK question</h2>
     <div class="hint" id="qStackHelp"></div>
+    <h3>Question variables
+      <button type="button" id="copyQModel" style="margin-inline-start:10px">Copy</button>
+      <span id="copyQModelMsg" class="hint"></span></h3>
+    <textarea id="qModel" readonly spellcheck="false" style="height:70px"></textarea>
   </section>
 </main>
 
@@ -1350,7 +1354,23 @@ function questionFromCode(text) {
 }
 
 /* the state input's model answer: the reference LaTeX as a Maxima string (Moodle shows it as "the correct answer") */
-function stackModelState() { return JSON.stringify(keyboards.refHost.getLatex()); }
+/*
+ * Moodle's "Fill in correct responses" puts the inputs' model answers into the inputs. The state input's model answer is
+ * a whole saved state of the reference answer (with the editor AST, so the keyboard shows it - plain LaTeX cannot be
+ * put back into the keyboard), as a Maxima string in the question variables: the model answer field holds only 255
+ * characters.
+ */
+const STACK_MODEL_VAR = "mqmodel";
+function stackModelState() {
+    const k = keyboards.refHost;
+    return JSON.stringify({
+        v: 1, latex: k.getLatex(), editor: k.getEditorAST(),
+        unit: k.getUnit() ? { value: k.getUnit(), scale: k.getUnitScale() } : null, grade: 100
+    });
+}
+function stackModelVariable() {
+    return STACK_MODEL_VAR + ": \"" + stackModelState().replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\";";
+}
 
 function stackHelpHtml(q) {
     const s = esc(q.inputs.score || "ans1"), t = esc(q.inputs.state || "ans2");
@@ -1359,7 +1379,7 @@ function stackHelpHtml(q) {
         "<code>[[input:ans1]] [[validation:ans1]]</code> and do <b>not</b> add the inputs again. Then set each input in its section of the question form:</p>" +
         "<table><tr><th></th><th>" + s + " - the score</th><th>" + t + " - the saved answer</th></tr>" +
         "<tr><td>Input type</td><td>Numerical</td><td>String</td></tr>" +
-        "<tr><td>Model answer</td><td><code>1</code></td><td><code>" + esc(stackModelState()) + "</code> (with the quotes)</td></tr>" +
+        "<tr><td>Model answer</td><td><code>1</code></td><td><code>" + STACK_MODEL_VAR + "</code> - from the question variables (below)</td></tr>" +
         "<tr><td>Forbid float</td><td><b>No</b> (the score is a decimal)</td><td>-</td></tr>" +
         "<tr><td>Student must verify</td><td>No</td><td>No</td></tr>" +
         "<tr><td>Show the validation</td><td><b>No</b></td><td><b>No</b></td></tr>" +
@@ -1368,6 +1388,9 @@ function stackHelpHtml(q) {
         "feedback variables <code>sc: " + s + ";</code> and one node - SAns <code>" + s + "</code>, TAns <code>1</code>, answer test <code>NumAbsolute</code> " +
         "with the option <code>0.0001</code>; true branch: score <code>1</code>; false branch: score <code>sc</code>. " + t + " needs no PRT: STACK saves it " +
         "and the keyboard reads it back. The feedback text is shown on the review page, inside the frame (the review options above).</p>" +
+        "<p><b>Question variables.</b> Paste the line below into the question's <i>Question variables</i> (add it to any variables " +
+        "already there). It is the reference answer of tab 2 as the keyboard saves it, so Moodle's <i>Fill in correct responses</i> shows it " +
+        "in the keyboard. Copy it again after a change of the reference answer.</p>" +
         "<p><b>The library folder</b> must hold the three files, of matching versions. A change of a library reaches Moodle only after the push to GitHub " +
         "(and the CDN's cache); a change of the template (the code version in the first comment) needs the code pasted again.</p>";
 }
@@ -1410,6 +1433,7 @@ function showQuestionTab(restart) {
     }
     $("qCode").value = q.target === "stack" ? stackCode(q, cfg) : htmlCode(q, cfg);
     $("qStackHelp").innerHTML = stackHelpHtml(q);
+    $("qModel").value = stackModelVariable();
     if (restart !== false) { tryState = null; $("qTryState").value = ""; startTry(false); }
 }
 let qTimer = null;
@@ -1424,6 +1448,7 @@ $("tabQuestion").querySelector("section").addEventListener("change", questionSet
 $("qSubmit").addEventListener("click", function () { startTry(true); });
 $("qAgain").addEventListener("click", function () { startTry(false); });
 $("copyQCode").addEventListener("click", function () { copyFrom("qCode", "copyQCodeMsg"); });
+$("copyQModel").addEventListener("click", function () { copyFrom("qModel", "copyQModelMsg"); });
 
 /* Save…: the code as a file - .txt for STACK, .html for a page (the file picker where the browser has it, else a download) */
 async function saveQuestionCode() {
