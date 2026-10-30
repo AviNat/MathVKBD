@@ -25,7 +25,7 @@
  *     mathJaxUrl                                 - STACK-JS only; default MathJax 3 from jsDelivr
  *     exercise: the playground's exercise package (.mchk): keyboard, reference, referenceUnit, rules, rubric, language }
  *
- * The saved state (the STACK string input, or what onChange gets): JSON
+ * The saved state (what onChange gets; in the STACK string input encoded: "mq1:" + base64 of the JSON, see encodeState):
  *   { v: 1, latex, editor, unit: { value, scale } | null, grade, feedback }
  * editor - the keyboard's editor AST, to show the answer again; latex - to read it without the keyboard; grade 0..100
  * and feedback - what the student got, for Moodle's response history. Plain text (Moodle's "Fill in correct
@@ -34,7 +34,7 @@
 (function (global) {
 "use strict";
 
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 const MATHJAX_URL = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
 
 const TEXT = {
@@ -74,9 +74,32 @@ function typeset(el) {
 /* ============================================================
    THE SAVED STATE
    ============================================================ */
+/*
+ * In a STACK string input the state is STATE_PREFIX + base64 of the JSON (UTF-8): letters, digits, + / = only. The
+ * JSON itself has backslashes (\n in the feedback, LaTeX) and characters such as − and ·; with them a wrong answer's
+ * state was invalid in STACK, so Check did not grade it (2026-10-30 - a correct one, "Score: 100%", had none).
+ */
+const STATE_PREFIX = "mq1:";
+function encodeState(state) {
+    const bytes = new TextEncoder().encode(JSON.stringify(state));
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+    return STATE_PREFIX + global.btoa(bin);
+}
+function decodeState(text) {
+    const bin = global.atob(text.slice(STATE_PREFIX.length).replace(/\s+/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+}
+
 function parseState(text) {
     if (text && typeof text === "object") return text;
     if (!text) return null;
+    text = String(text).trim();
+    if (text.indexOf(STATE_PREFIX) === 0) {
+        try { text = decodeState(text); } catch (e) { return null; }
+    }
     let s = null;
     try { s = JSON.parse(text); } catch (e) { s = null; }
     if (s && typeof s === "object" && (s.editor || typeof s.latex === "string")) return s;
@@ -241,6 +264,18 @@ function mountStackJs(stackJs, cfg) {
             return document.getElementById(id);
         });
     }
+    /*
+     * The score as STACK's numerical input takes it also with "Forbid float" on (2026-10-30: a decimal score 0.4 was
+     * invalid there, so Check did not grade a partly correct answer - and the hidden validation did not show why):
+     * 0, 1 or a fraction in lowest terms of 10000ths, e.g. 2/5.
+     */
+    function scoreText(score) {
+        const n = Math.max(0, Math.min(10000, Math.round(score * 10000)));
+        if (n === 0 || n === 10000) return String(n / 10000);
+        let a = n, b = 10000;
+        while (b) { const t = a % b; a = b; b = t; }
+        return (n / a) + "/" + (10000 / a);
+    }
     /* a value reaches Moodle only with a change event */
     function put(el, value) {
         if (!el || el.value === value) return;
@@ -255,8 +290,8 @@ function mountStackJs(stackJs, cfg) {
             state: stateEl ? parseState(stateEl.value) : null,
             review: review,
             save: function (state, score) {
-                put(stateEl, state ? JSON.stringify(state) : "");
-                put(scoreEl, state ? String(score) : "");
+                put(stateEl, state ? encodeState(state) : "");
+                put(scoreEl, state ? scoreText(score) : "");
             }
         });
         /* the keys cannot float over the page: they close when the student leaves the frame (Moodle's Check, the next question) */
@@ -322,7 +357,8 @@ const MathQuestion = {
     version: VERSION,
     mountStackJs: mountStackJs,
     mount: mount,
-    parseState: parseState
+    parseState: parseState,
+    encodeState: encodeState
 };
 if (typeof module === "object" && module.exports) module.exports = MathQuestion;
 global.MathQuestion = MathQuestion;

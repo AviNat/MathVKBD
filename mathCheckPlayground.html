@@ -1363,14 +1363,13 @@ function questionFromCode(text) {
 const STACK_MODEL_VAR = "mqmodel";
 function stackModelState() {
     const k = keyboards.refHost;
-    return JSON.stringify({
+    return MathQuestion.encodeState({
         v: 1, latex: k.getLatex(), editor: k.getEditorAST(),
         unit: k.getUnit() ? { value: k.getUnit(), scale: k.getUnitScale() } : null, grade: 100
     });
 }
-function stackModelVariable() {
-    return STACK_MODEL_VAR + ": \"" + stackModelState().replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\";";
-}
+/* encoded as the frame saves it (base64): nothing to escape in the Maxima string */
+function stackModelVariable() { return STACK_MODEL_VAR + ": \"" + stackModelState() + "\";"; }
 
 function stackHelpHtml(q) {
     const s = esc(q.inputs.score || "ans1"), t = esc(q.inputs.state || "ans2");
@@ -1380,7 +1379,7 @@ function stackHelpHtml(q) {
         "<table><tr><th></th><th>" + s + " - the score</th><th>" + t + " - the saved answer</th></tr>" +
         "<tr><td>Input type</td><td>Numerical</td><td>String</td></tr>" +
         "<tr><td>Model answer</td><td><code>1</code></td><td><code>" + STACK_MODEL_VAR + "</code> - from the question variables (below)</td></tr>" +
-        "<tr><td>Forbid float</td><td><b>No</b> (the score is a decimal)</td><td>-</td></tr>" +
+        "<tr><td>Forbid float</td><td>Yes or No (the score is 0, 1 or a fraction such as 2/5)</td><td>-</td></tr>" +
         "<tr><td>Student must verify</td><td>No</td><td>No</td></tr>" +
         "<tr><td>Show the validation</td><td><b>No</b></td><td><b>No</b></td></tr>" +
         "<tr><td>Extra options</td><td><code>hideanswer</code></td><td><code>hideanswer</code></td></tr></table>" +
