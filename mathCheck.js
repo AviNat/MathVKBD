@@ -15,7 +15,7 @@
  * Version 0.1 (2026-10-21): value (numeric sampling), equations, inequalities, and / or, sets, tuples, derivations
  * (last step or all steps), the equivalence ladder (structural canonical form), form checks, diagnosis of a wrong value,
  * teacher-defined mistakes, the rubric, feedback in he / en / ar. Not yet: structures (integral, limit, Σ...) beyond
- * exact comparison, units, complex numbers, highlighting (the items keep the node ids for it).
+ * exact comparison, units, complex numbers, highlighting (the items keep the node ids for it). Σ / Π part by part: 0.9.0.
  */
 (function (root, factory) {
     if (typeof module === "object" && module.exports) module.exports = factory();
@@ -26,7 +26,11 @@
 /* 0.8.0 (2026-10-30): "=" binds tighter than ∨ ∧ and the comma (regroupJoiners); rules.statements.list */
 /* 0.8.1 (2026-10-30): rubric category direction (wrong-direction) apart from relation (wrong-relation), each its own rule;
    in an and / or answer, a condition with the same sides and another relation is a relation / direction error, not missing + extra */
-const VERSION = "0.8.1";
+/* 0.9.0 (2026-10-30): Σ / Π - computed (finite), compared part by part; rules.structures, categories structureForm,
+   bounds, body, indexVariable */
+/* 0.10.0 (2026-10-30): ∫ - computed when definite with finite limits (adaptive Simpson), compared part by part;
+   rules.structures.integrandInRange */
+const VERSION = "0.10.0";
 
 /* ============================================================
    DEFAULTS
@@ -78,6 +82,14 @@ const DEFAULT_RULES = {
         otherUnits: true,                // 2000 m for 2 km: true accepted, "note" accepted with a note, false an error
         strict: false                    // true: only the reference's unit (as otherUnits: false); a unit error fatal: rubric.fatal "units"
     },
+    /* Σ / Π compared part by part (CHECKING-API-DESIGN 3.7) */
+    structures: {
+        sameForm: "root",                // the reference is a Σ: "root" the answer is one, "contains" it has one, false any form of the value
+        renameBoundVariable: true,       // Σ_i i² for Σ_k k²
+        indexShift: "note",              // Σ_{k=0}^{9}(k+1)² for Σ_{k=1}^{10}k²: true | "note" | false (an error)
+        wholeValue: "note",              // other parts, the same value (finite bounds): true | "note" | false (the part errors)
+        integrandInRange: true           // ∫ with limits: the integrand compared only between them (|x| = x on [0, 1]); false: everywhere
+    },
     diagnosis: true,
     mistakes: [],
     feedback: {
@@ -105,6 +117,10 @@ const DEFAULT_RUBRIC = {
         domain: { mode: "once", points: 30 },
         units: { mode: "once", points: 30 },
         plusMinus: { mode: "once", points: 50 },
+        structureForm: { mode: "once", points: 50 },
+        bounds: { mode: "each", points: 25, max: 50 },
+        body: { mode: "once", points: 50 },
+        indexVariable: { mode: "once", points: 25 },
         mistake: { mode: "once", points: 100 }
     }
 };
@@ -149,6 +165,21 @@ const CATEGORY_OF = {
     "not-equivalent-form": "form",
     "wrong-relation": "relation",
     "wrong-direction": "direction",
+    "not-same-form": "structureForm",
+    "wrong-operator": "structureForm",
+    "index-shift-not-accepted": "structureForm",
+    "wrong-lower-bound": "bounds",
+    "wrong-upper-bound": "bounds",
+    "lower-bound-off-by-one": "bounds",
+    "upper-bound-off-by-one": "bounds",
+    "swapped-bounds": "bounds",
+    "wrong-body": "body",
+    "body-without-index": "body",
+    "wrong-index-variable": "indexVariable",
+    "wrong-integration-variable": "indexVariable",
+    "missing-differential": "indexVariable",
+    "missing-limits": "bounds",
+    "extra-limits": "bounds",
     "missing-element": "elements",
     "extra-element": "elements",
     "duplicate-element": "elements",
@@ -367,7 +398,12 @@ function kindOf(a) {
 
 function hasMissing(node) {
     let found = false;
-    walk(node, function (n) { if (n.type === "missing" || n.type === "placeholder") found = true; });
+    walk(node, function (n) {
+        if (n.type === "missing" || n.type === "placeholder") found = true;
+        if (INDEXED[n.type] && (!n.indexVariable || !n.start || !n.end || !n.body)) found = true;
+        /* an integral: one limit without the other, or no integrand (no dx: missing-differential) */
+        if (n.type === "integral" && (!n.integrand || !n.lower !== !n.upper)) found = true;
+    });
     return found;
 }
 
@@ -501,8 +537,76 @@ function evaluate(node, env) {
         case "percent": return evaluate(node.value, env) / 100;
         case "degree": return evaluate(node.value, env) * Math.PI / 180;
         case "scientific": return evaluate(node.coefficient, env) * Math.pow(10, evaluate(node.exponent, env));
+        case "sum":
+        case "product": return evaluateIndexed(node, env);
+        case "integral": return evaluateIntegral(node, env);
     }
     throw new Unsupported(node.type);
+}
+
+/* a limit of an integral or a Σ: a number, ∞ or −∞ */
+function limitValue(node, env) {
+    if (isInfinity(node)) return Infinity;
+    if (node && node.type === "operation" && node.op === "neg" && isInfinity(node.operands[0])) return -Infinity;
+    return evaluate(node, env);
+}
+
+/*
+ * A definite integral with finite limits, by the adaptive Simpson rule. Indefinite, an ∞ limit, or an integrand that
+ * is not finite somewhere in the range (improper): cannot be computed - the parts decide (compareIntegral)
+ */
+function evaluateIntegral(node, env) {
+    const v = node.variable && varKey(node.variable);
+    if (!v || !node.lower || !node.upper) throw new Unsupported("indefinite integral");
+    const a = limitValue(node.lower, env), b = limitValue(node.upper, env);
+    if (!isFinite(a) || !isFinite(b)) throw new Unsupported("improper integral");
+    const vars = Object.assign({}, env.vars), inner = { vars: vars, s: env.s };
+    const f = function (x) {
+        vars[v] = x;
+        const y = evaluate(node.integrand, inner);
+        if (!isFinite(y)) throw new Unsupported("improper integral");
+        return y;
+    };
+    const simpson = function (l, r, fl, fm, fr) { return (r - l) / 6 * (fl + 4 * fm + fr); };
+    const step = function (l, r, fl, fm, fr, whole, eps, depth) {
+        const m = (l + r) / 2, lm = (l + m) / 2, rm = (m + r) / 2;
+        const flm = f(lm), frm = f(rm);
+        const left = simpson(l, m, fl, flm, fm), right = simpson(m, r, fm, frm, fr);
+        if (depth <= 0 || Math.abs(left + right - whole) <= 15 * eps) return left + right + (left + right - whole) / 15;
+        return step(l, m, fl, flm, fm, left, eps / 2, depth - 1) + step(m, r, fm, frm, fr, right, eps / 2, depth - 1);
+    };
+    if (a === b) return 0;
+    const fa = f(a), fb = f(b), fm = f((a + b) / 2);
+    return step(a, b, fa, fm, fb, simpson(a, b, fa, fm, fb), 1e-13 * Math.max(1, Math.abs(b - a)), 40);
+}
+
+/* Σ / Π: the latex operator; the structures compared part by part (compareOne, CHECKING-API-DESIGN 3.7) */
+const INDEXED = { sum: "\\sum", product: "\\prod" };
+const STRUCTURE_TYPES = { sum: true, product: true, integral: true };
+const MAX_TERMS = 1000;
+
+function isInfinity(node) { return !!node && node.type === "constant" && node.name === "infinity"; }
+function asInteger(x) {
+    const n = Math.round(x);
+    return isFinite(x) && Math.abs(x - n) < 1e-9 ? n : null;
+}
+
+/* Σ / Π with finite integer bounds, by a loop; ∞ or more than MAX_TERMS terms cannot be computed. An empty Σ is 0, Π 1 */
+function evaluateIndexed(node, env) {
+    const idx = node.indexVariable && varKey(node.indexVariable);
+    if (!idx) throw new Unsupported(node.type + " without an index");
+    if (isInfinity(node.start) || isInfinity(node.end)) throw new Unsupported("infinite " + node.type);
+    const lo = asInteger(evaluate(node.start, env)), hi = asInteger(evaluate(node.end, env));
+    if (lo === null || hi === null) return NaN;
+    if (hi - lo + 1 > MAX_TERMS) throw new Unsupported("long " + node.type);
+    const vars = Object.assign({}, env.vars), inner = { vars: vars, s: env.s };
+    let acc = node.type === "sum" ? 0 : 1;
+    for (let j = lo; j <= hi; j += 1) {
+        vars[idx] = j;
+        const v = evaluate(node.body, inner);
+        acc = node.type === "sum" ? acc + v : acc * v;
+    }
+    return acc;
 }
 
 function usesPlusMinus(node) {
@@ -1086,7 +1190,12 @@ function latex(node, parentPrec) {
         case "number": return String(node.value);
         case "variable": return node.name;
         case "indexedVariable": return latex(node.variable) + "_{" + latex(node.subscript) + "}";
-        case "constant": return node.name === "pi" ? "\\pi" : node.name;
+        case "constant": return node.name === "pi" ? "\\pi" : node.name === "infinity" ? "\\infty" : node.name;
+        case "integral":
+            return wrap("\\int" + (node.lower ? "_{" + latex(node.lower) + "}^{" + latex(node.upper) + "}" : "") + latex(node.integrand) +
+                "\\,d" + latex(node.variable), 4);
+        case "sum": case "product":
+            return wrap(INDEXED[node.type] + "_{" + latex(node.indexVariable) + "=" + latex(node.start) + "}^{" + latex(node.end) + "}" + latex(node.body, 4), 4);
         case "vector": {
             const nm = node.name || {};
             const text = nm.points ? nm.points.map(function (p) { return p.name; }).join("") : (nm.name || "");
@@ -1202,6 +1311,23 @@ const TEXT = {
         "diff-equationForms": "the equation is rearranged (terms moved or multiplied) differently from the expected form",
         "wrong-relation": "The relation \\({actual}\\) is not the right one.",
         "wrong-direction": "The inequality points the wrong way.",
+        "not-same-form": "The answer should be written in the form of {what}.",
+        "wrong-operator": "The operation \\({actual}\\) is not the right one.",
+        "wrong-lower-bound": "The lower limit of {what} is not correct.",
+        "wrong-upper-bound": "The upper limit of {what} is not correct.",
+        "lower-bound-off-by-one": "The lower limit of {what} is off by one.",
+        "upper-bound-off-by-one": "The upper limit of {what} is off by one.",
+        "swapped-bounds": "The limits of {what} are swapped.",
+        "wrong-body": "The expression inside {what} is not correct.",
+        "body-without-index": "The expression inside {what} does not depend on the index \\({index}\\).",
+        "wrong-index-variable": "The index variable of {what} is not the expected one.",
+        "wrong-integration-variable": "The variable of integration of {what} is not the expected one.",
+        "missing-differential": "The differential (such as dx) of {what} is missing.",
+        "missing-limits": "The answer should be a definite integral, with limits.",
+        "extra-limits": "The answer should be an indefinite integral, without limits.",
+        "index-shift-not-accepted": "Write {what} with the expected limits, without shifting the index.",
+        "note-index-shift": "Accepted: {what} with the index shifted.",
+        "note-same-value": "Accepted: {what} written in another form with the same value.",
         "missing-element": "An element is missing.",
         "missing-element-named": "The element \\({element}\\) is missing.",
         "missing-statement-named": "The part \\({statement}\\) is missing from the answer.",
@@ -1238,7 +1364,8 @@ const TEXT = {
         "kind-list": "a list", "kind-derivation": "a chain of steps", "kind-empty": "empty",
         "kind-membership": "a membership (x ∈ A)",
         "cat-value": "Value", "cat-sign": "Sign", "cat-factor": "Factor", "cat-scale": "Scale", "cat-term": "Terms",
-        "cat-form": "Form", "cat-commaList": "Commas", "cat-relation": "Relation", "cat-direction": "Direction", "cat-elements": "Elements", "cat-order": "Order",
+        "cat-form": "Form", "cat-commaList": "Commas", "cat-relation": "Relation", "cat-direction": "Direction", "cat-structureForm": "Form of the answer", "cat-bounds": "Limits",
+        "cat-body": "Expression inside", "cat-indexVariable": "Index","cat-elements": "Elements", "cat-order": "Order",
         "cat-precision": "Precision", "cat-derivation": "Derivation", "cat-mistake": "Common mistake", "cat-domain": "Domain",
         "cat-incomplete": "Incomplete", "cat-answerType": "Type of answer",
         "detail-like-terms": "combine the like terms", "detail-numbers": "calculate the numbers",
@@ -1301,6 +1428,23 @@ const TEXT = {
         "diff-equationForms": "המשוואה מסודרת אחרת (איברים הועברו או הוכפלו) מהצורה הנדרשת",
         "wrong-relation": "היחס \\({actual}\\) אינו היחס הנכון.",
         "wrong-direction": "כיוון אי־השוויון הפוך.",
+        "not-same-form": "יש לכתוב את התשובה בצורת {what}.",
+        "wrong-operator": "הפעולה \\({actual}\\) אינה הפעולה הנכונה.",
+        "wrong-lower-bound": "הגבול התחתון של {what} שגוי.",
+        "wrong-upper-bound": "הגבול העליון של {what} שגוי.",
+        "lower-bound-off-by-one": "הגבול התחתון של {what} שגוי ב־1.",
+        "upper-bound-off-by-one": "הגבול העליון של {what} שגוי ב־1.",
+        "swapped-bounds": "הגבולות של {what} הפוכים.",
+        "wrong-body": "הביטוי שבתוך {what} שגוי.",
+        "body-without-index": "הביטוי שבתוך {what} אינו תלוי באינדקס \\({index}\\).",
+        "wrong-index-variable": "משתנה האינדקס של {what} אינו המשתנה הנדרש.",
+        "wrong-integration-variable": "משתנה האינטגרציה של {what} אינו המשתנה הנדרש.",
+        "missing-differential": "חסר הדיפרנציאל (כמו dx) של {what}.",
+        "missing-limits": "התשובה צריכה להיות אינטגרל מסוים, עם גבולות.",
+        "extra-limits": "התשובה צריכה להיות אינטגרל לא מסוים, בלי גבולות.",
+        "index-shift-not-accepted": "יש לכתוב את {what} עם הגבולות הנדרשים, בלי להזיז את האינדקס.",
+        "note-index-shift": "התקבל: {what} עם הזזה של האינדקס.",
+        "note-same-value": "התקבל: {what} כתוב בצורה אחרת עם אותו ערך.",
         "missing-element": "חסר איבר.",
         "missing-element-named": "חסר האיבר \\({element}\\).",
         "missing-statement-named": "בתשובה חסר החלק \\({statement}\\).",
@@ -1337,7 +1481,8 @@ const TEXT = {
         "kind-list": "רשימה", "kind-derivation": "שרשרת שלבים", "kind-empty": "ריקה",
         "kind-membership": "שייכות לקבוצה (x ∈ A)",
         "cat-value": "ערך", "cat-sign": "סימן", "cat-factor": "גורם", "cat-scale": "קנה מידה", "cat-term": "איברים",
-        "cat-form": "צורה", "cat-commaList": "פסיקים", "cat-relation": "יחס", "cat-direction": "כיוון", "cat-elements": "איברים", "cat-order": "סדר",
+        "cat-form": "צורה", "cat-commaList": "פסיקים", "cat-relation": "יחס", "cat-direction": "כיוון", "cat-structureForm": "צורת התשובה", "cat-bounds": "גבולות",
+        "cat-body": "הביטוי הפנימי", "cat-indexVariable": "אינדקס","cat-elements": "איברים", "cat-order": "סדר",
         "cat-precision": "דיוק", "cat-derivation": "פיתוח", "cat-mistake": "טעות נפוצה", "cat-domain": "תחום",
         "cat-incomplete": "תשובה חלקית", "cat-answerType": "סוג התשובה",
         "detail-like-terms": "יש לכנס איברים דומים", "detail-numbers": "יש לחשב את המספרים",
@@ -1400,6 +1545,23 @@ const TEXT = {
         "diff-equationForms": "المعادلة مرتبة بشكل آخر (حدود نُقلت أو ضُربت) مختلف عن الشكل المطلوب",
         "wrong-relation": "العلاقة \\({actual}\\) ليست العلاقة الصحيحة.",
         "wrong-direction": "اتجاه المتباينة معكوس.",
+        "not-same-form": "اكتب الإجابة على صورة {what}.",
+        "wrong-operator": "العملية \\({actual}\\) ليست العملية الصحيحة.",
+        "wrong-lower-bound": "الحد الأدنى في {what} غير صحيح.",
+        "wrong-upper-bound": "الحد الأعلى في {what} غير صحيح.",
+        "lower-bound-off-by-one": "الحد الأدنى في {what} يختلف بواحد عن الصحيح.",
+        "upper-bound-off-by-one": "الحد الأعلى في {what} يختلف بواحد عن الصحيح.",
+        "swapped-bounds": "الحدّان في {what} معكوسان.",
+        "wrong-body": "التعبير داخل {what} غير صحيح.",
+        "body-without-index": "التعبير داخل {what} لا يعتمد على الدليل \\({index}\\).",
+        "wrong-index-variable": "متغير الدليل في {what} ليس المتغير المطلوب.",
+        "wrong-integration-variable": "متغير التكامل في {what} ليس المتغير المطلوب.",
+        "missing-differential": "ينقص التفاضل (مثل dx) في {what}.",
+        "missing-limits": "يجب أن تكون الإجابة تكاملًا محدودًا، مع حدود.",
+        "extra-limits": "يجب أن تكون الإجابة تكاملًا غير محدود، دون حدود.",
+        "index-shift-not-accepted": "اكتب {what} بالحدود المطلوبة دون إزاحة الدليل.",
+        "note-index-shift": "مقبول: {what} مع إزاحة الدليل.",
+        "note-same-value": "مقبول: {what} مكتوب بصورة أخرى لها القيمة نفسها.",
         "missing-element": "ينقص عنصر.",
         "missing-element-named": "ينقص العنصر \\({element}\\).",
         "missing-statement-named": "ينقص الجزء \\({statement}\\) من الإجابة.",
@@ -1436,7 +1598,8 @@ const TEXT = {
         "kind-list": "قائمة", "kind-derivation": "سلسلة خطوات", "kind-empty": "فارغة",
         "kind-membership": "انتماء لمجموعة (x ∈ A)",
         "cat-value": "القيمة", "cat-sign": "الإشارة", "cat-factor": "العامل", "cat-scale": "المقياس", "cat-term": "الحدود",
-        "cat-form": "الشكل", "cat-commaList": "الفواصل", "cat-relation": "العلاقة", "cat-direction": "الاتجاه", "cat-elements": "العناصر", "cat-order": "الترتيب",
+        "cat-form": "الشكل", "cat-commaList": "الفواصل", "cat-relation": "العلاقة", "cat-direction": "الاتجاه", "cat-structureForm": "صورة الإجابة", "cat-bounds": "الحدود",
+        "cat-body": "التعبير الداخلي", "cat-indexVariable": "الدليل","cat-elements": "العناصر", "cat-order": "الترتيب",
         "cat-precision": "الدقة", "cat-derivation": "الاشتقاق", "cat-mistake": "خطأ شائع", "cat-domain": "المجال",
         "cat-incomplete": "إجابة ناقصة", "cat-answerType": "نوع الإجابة",
         "detail-like-terms": "اجمع الحدود المتشابهة", "detail-numbers": "احسب الأعداد",
@@ -1717,6 +1880,187 @@ function expressionsEqual(s, r, ctx) {
         return { equal: step >= 0, step: step, unsupported: sample.unsupported, rows: [] };
     }
     return { equal: rowsEqual(sample.rows, 1, 0, rules.value.tolerance), step: step, rows: sample.rows, vars: sample.vars };
+}
+
+/* a parameter in the bounds of a Σ / Π (Σ_{k=1}^{n}) is a positive integer, unless the teacher's rules set it */
+function withBoundParameters(rules, nodes) {
+    const vars = [];
+    nodes.forEach(function (root) {
+        walk(root, function (n) { if (INDEXED[n.type]) { collectVariables(n.start, vars); collectVariables(n.end, vars); } });
+    });
+    const extra = {};
+    vars.forEach(function (k) { if (!rules.value.variables[k]) extra[k] = { integer: true, min: 1, max: 8 }; });
+    return Object.keys(extra).length ? merge(rules, { value: { variables: extra } }) : rules;
+}
+
+/*
+ * Two Σ (or two Π) part by part, at the same sample points of the parameters:
+ *   start, end - by value (∞ only equals ∞); off by one when the difference is always ±1; swapped
+ *   body - with each one's own index set to the same integers, from the reference's start (up to BODY_TERMS of them)
+ *   shift - Σ_{k=0}^{9}(k+1)² for Σ_{k=1}^{10}k²: the bounds moved by the same integer d and body_s(k + d) = body_r(k)
+ *   sameValue - the whole values equal (finite bounds)
+ * { unsupported } when a part cannot be computed.
+ */
+const BODY_TERMS = 20;
+function indexedParts(s, r, ctx) {
+    const tol = ctx.rules.value.tolerance;
+    const si = varKey(s.indexVariable), ri = varKey(r.indexVariable);
+    const params = [];
+    [s, r].forEach(function (n) {
+        collectVariables(n.start, params);
+        collectVariables(n.end, params);
+        collectVariables(n.body, []).forEach(function (k) {
+            if (k !== varKey(n.indexVariable) && params.indexOf(k) < 0) params.push(k);
+        });
+    });
+    const bodyVars = collectVariables(s.body, []);
+    const out = {
+        sIndex: si, rIndex: ri, start: true, end: true, body: true, swapped: true, sameValue: true,
+        startOff: true, endOff: true, shift: null, bodyNoIndex: bodyVars.indexOf(si) < 0
+    };
+    const want = params.length ? Math.max(3, ctx.rules.value.samples || 8) : 1;
+    const envs = ctx.sample(params, want * 4);
+    const bound = function (node, env) { return isInfinity(node) ? Infinity : evaluate(node, env); };
+    const same = function (a, b) { return a === b || closeTo(a, b, tol); };
+    let shift, shiftOk = true, used = 0;
+    let shiftEnd, endShiftOk = true, endFollows = true, endFollowsByOne = true, startFollowsByOne = true;
+    try {
+        for (let p = 0; p < envs.length && used < want; p += 1) {
+            const env = envs[p];
+            const rs = bound(r.start, env), re = bound(r.end, env);
+            if (asInteger(rs) === null || !(asInteger(re) !== null || re === Infinity)) continue;
+            used += 1;
+            const ss = bound(s.start, env), se = bound(s.end, env);
+            if (!same(ss, rs)) { out.start = false; }
+            if (!(Math.abs(ss - rs) === 1)) out.startOff = false;
+            if (!same(se, re)) { out.end = false; }
+            if (!(Math.abs(se - re) === 1)) out.endOff = false;
+            if (!(same(ss, re) && same(se, rs))) out.swapped = false;
+            /*
+             * the body at the same integers; a shift: the same integer d at both bounds. The body shifted with one bound
+             * only (Σ_{n=1}^{10} 1/2^(n−1) for Σ_{n=0}^{10} 1/2^n): the other bound is the one error (partial)
+             */
+            const d = asInteger(ss - rs), dE = re === Infinity || se === Infinity ? null : asInteger(se - re);
+            if (d === null || d === 0 || (shift !== undefined && d !== shift)) shiftOk = false;
+            if (dE === null || dE === 0 || (shiftEnd !== undefined && dE !== shiftEnd)) endShiftOk = false;
+            shift = d;
+            shiftEnd = dE;
+            if (!(re === Infinity ? se === Infinity : same(se - re, d))) endFollows = false;
+            if (!(re === Infinity ? se === Infinity : Math.abs(se - re - d) === 1)) endFollowsByOne = false;
+            if (dE === null || Math.abs(ss - rs - dE) !== 1) startFollowsByOne = false;
+            const hi = re === Infinity ? rs + BODY_TERMS - 1 : Math.min(re, rs + BODY_TERMS - 1);
+            const at = function (node, idx, j) {
+                const vars = Object.assign({}, env.vars);
+                vars[idx] = j;
+                return evaluate(node.body, { vars: vars, s: 1 });
+            };
+            for (let j = rs; j <= Math.max(hi, rs); j += 1) {
+                const rv = at(r, ri, j);
+                if (!isFinite(rv)) continue;
+                if (!same(at(s, si, j), rv)) out.body = false;
+                if (shiftOk && d !== null && !same(at(s, si, j + d), rv)) shiftOk = false;
+                if (endShiftOk && dE !== null && !same(at(s, si, j + dE), rv)) endShiftOk = false;
+            }
+            /* the whole value */
+            if (out.sameValue) {
+                if (re === Infinity || se === Infinity || ss === Infinity) out.sameValue = false;
+                else {
+                    let a, b;
+                    try { a = evaluate(s, env); b = evaluate(r, env); } catch (e) { if (e instanceof Unsupported) a = NaN; else throw e; }
+                    if (!same(a, b)) out.sameValue = false;
+                }
+            }
+        }
+    } catch (e) {
+        if (e instanceof Unsupported) return { unsupported: e.what };
+        throw e;
+    }
+    if (used === 0) return { unsupported: "bounds" };
+    if (out.start) out.startOff = false;
+    if (out.end) out.endOff = false;
+    if (out.start && out.end) out.swapped = false;
+    out.shift = shiftOk && endFollows && !out.start ? shift : null;
+    /* the body shifted with the start, the end not (or the reverse): only the other bound is wrong */
+    out.partial = out.shift !== null || out.body ? null
+        : shiftOk && !out.start ? { part: "end", off: endFollowsByOne }
+        : endShiftOk && !out.end ? { part: "start", off: startFollowsByOne } : null;
+    return out;
+}
+
+/*
+ * Two integrals part by part, at the same sample points of the parameters:
+ *   lower, upper - by value (∞, −∞); swapped. Only when both have limits (definite)
+ *   integrand - with each one's own variable set to the same points: inside the reference's limits
+ *     (structures.integrandInRange; an ∞ limit: 4 units from the other), else in the variable's range
+ *   sameValue - both computed (definite, finite limits, finite integrand)
+ * A missing dx: the reference's variable. { unsupported } when a part cannot be computed.
+ */
+const INTEGRAND_POINTS = 9;
+function integralParts(s, r, ctx) {
+    const rules = ctx.rules, tol = rules.value.tolerance;
+    const rv = varKey(r.variable), sv = s.variable ? varKey(s.variable) : rv;
+    const definite = !!(s.lower && r.lower);
+    const params = [];
+    [[s, sv], [r, rv]].forEach(function (pair) {
+        const n = pair[0];
+        if (n.lower) { collectVariables(n.lower, params); collectVariables(n.upper, params); }
+        collectVariables(n.integrand, []).forEach(function (k) { if (k !== pair[1] && params.indexOf(k) < 0) params.push(k); });
+    });
+    const out = { sVar: sv, rVar: rv, lower: true, upper: true, body: true, swapped: definite, sameValue: definite };
+    const want = params.length ? Math.max(3, rules.value.samples || 8) : 1;
+    const envs = ctx.sample(params, want * 4);
+    const same = function (a, b) { return a === b || closeTo(a, b, tol); };
+    const spec = rules.value.variables[rv] || {}, dom = rules.value.domain || { min: -4, max: 4 };
+    let used = 0;
+    try {
+        for (let p = 0; p < envs.length && used < want; p += 1) {
+            const env = envs[p];
+            let lo = spec.min !== undefined ? spec.min : dom.min, hi = spec.max !== undefined ? spec.max : dom.max;
+            if (r.lower) {
+                const ra = limitValue(r.lower, env), rb = limitValue(r.upper, env);
+                if (isNaN(ra) || isNaN(rb)) continue;
+                if (definite) {
+                    const sa = limitValue(s.lower, env), sb = limitValue(s.upper, env);
+                    if (!same(sa, ra)) out.lower = false;
+                    if (!same(sb, rb)) out.upper = false;
+                    if (!(same(sa, rb) && same(sb, ra))) out.swapped = false;
+                }
+                if (rules.structures.integrandInRange !== false) {
+                    lo = Math.min(ra, rb); hi = Math.max(ra, rb);
+                    if (lo === -Infinity) lo = hi - 4;
+                    if (hi === Infinity) hi = lo + 4;
+                    if (lo === -Infinity) { lo = -4; hi = 4; }
+                }
+            }
+            used += 1;
+            /* the integrand at points inside [lo, hi] (not the ends: an improper integrand is not finite there) */
+            let compared = 0;
+            for (let i = 0; i < INTEGRAND_POINTS; i += 1) {
+                const x = lo + (hi - lo) * (i + 0.5 + 0.3 * Math.sin(i + 1)) / INTEGRAND_POINTS;
+                const at = function (node, v) {
+                    const vars = Object.assign({}, env.vars);
+                    vars[v] = x;
+                    return evaluate(node.integrand, { vars: vars, s: 1 });
+                };
+                const y = at(r, rv);
+                if (!isFinite(y)) continue;
+                compared += 1;
+                if (!same(at(s, sv), y)) out.body = false;
+            }
+            if (compared === 0) return { unsupported: "integrand" };
+            if (out.sameValue) {
+                let a, b;
+                try { a = evaluate(s, env); b = evaluate(r, env); } catch (e) { if (e instanceof Unsupported) a = NaN; else throw e; }
+                if (!same(a, b)) out.sameValue = false;
+            }
+        }
+    } catch (e) {
+        if (e instanceof Unsupported) return { unsupported: e.what };
+        throw e;
+    }
+    if (used === 0) return { unsupported: "limits" };
+    if (out.lower && out.upper) out.swapped = false;
+    return out;
 }
 
 /* statements: an equation (chain of 2), a relation, and / or of them */
@@ -2041,6 +2385,7 @@ function compareOne(student, reference, rules, options, debug) {
     const add = function (kind, code, params, nodes) {
         items.push({ kind: kind, code: code, params: params || {}, nodes: (nodes || []).filter(Boolean) });
     };
+    rules = withBoundParameters(rules, [student, reference]);
     const ctx = makeContext(rules, options.seed !== undefined ? options.seed : hashString(JSON.stringify(stripSrc(reference))));
     let s = answerOf(student);
     const r = answerOf(reference);
@@ -2082,7 +2427,8 @@ function compareOne(student, reference, rules, options, debug) {
     }
 
     /* "find the derivative": the question written back (d/dx of the expression) is not an answer */
-    const open = firstOperation(s, r);
+    /* (Π for Σ is the wrong operation, not a question written back: compareStructures) */
+    const open = r && INDEXED[s.type] && INDEXED[r.type] ? null : firstOperation(s, r);
     if (open) {
         add("error", "not-evaluated", { what: open.type }, [open]);
         return { items: items, state: state };
@@ -2142,6 +2488,113 @@ function compareOne(student, reference, rules, options, debug) {
         }
     }
 
+    /*
+     * A Σ / Π in the reference (CHECKING-API-DESIGN 3.7): the form first (structures.sameForm - the computed number is
+     * not a Σ), then two Σ part by part - the index, the bounds, the body - an index shift, the whole value. false when
+     * the reference has none, or the form is accepted and the usual comparison by value decides (Σ inside an expression).
+     */
+    function compareStructures(sv, rv) {
+        const st = rules.structures || {};
+        let inRef = null;
+        walk(rv, function (n) { if (!inRef && STRUCTURE_TYPES[n.type]) inRef = n.type; });
+        if (!inRef) return false;
+        const atRoot = !!STRUCTURE_TYPES[rv.type];
+        if (atRoot && INDEXED[sv.type] && INDEXED[rv.type] && sv.type !== rv.type) {
+            add("error", "wrong-operator", { actual: INDEXED[sv.type], expected: INDEXED[rv.type] }, [sv]);
+            return true;
+        }
+        if (atRoot && sv.type === rv.type) {
+            if (rv.type === "integral") compareIntegral(sv, rv, st);
+            else compareIndexed(sv, rv, st);
+            return true;
+        }
+        const sameForm = st.sameForm === undefined ? "root" : st.sameForm;
+        if (sameForm === false) return false;
+        let has = false;
+        walk(sv, function (n) { if (n.type === inRef) has = true; });
+        if (has && (sameForm === "contains" || !atRoot)) return false;
+        /* not the form: the value decides between not-same-form (the value is right) and a wrong value */
+        if (expressionsEqual(sv, rv, ctx).equal) {
+            state.valueRight = true;
+            add("error", "not-same-form", { what: inRef }, [sv]);
+        } else {
+            add("error", "wrong-value", {}, [sv]);
+        }
+        return true;
+    }
+
+    /* two integrals: the dx, definite or not, the limits, the integrand, the whole value (wholeValue) */
+    function compareIntegral(sv, rv, st) {
+        const what = "integral";
+        if (!sv.variable) add("error", "missing-differential", { what: what }, [sv]);
+        if (!rv.lower && sv.lower) add("error", "extra-limits", {}, [sv.lower, sv.upper]);
+        if (rv.lower && !sv.lower) add("error", "missing-limits", {}, [sv]);
+        const p = integralParts(sv, rv, ctx);
+        if (p.unsupported) {
+            if (equivalenceStep(sv, rv, rules) >= 0) state.valueRight = true;
+            else add("error", "wrong-value", {}, [sv]);
+            return;
+        }
+        if (sv.variable && p.sVar !== p.rVar && st.renameBoundVariable === false) {
+            add("error", "wrong-integration-variable", { what: what }, [sv.variable]);
+        }
+        /* the parts right: the value is right unless one is definite and the other not */
+        if (p.lower && p.upper && p.body) { state.valueRight = !sv.lower === !rv.lower; return; }
+        /* integrandInRange false: the integrand must be the same everywhere, the same value does not save it */
+        const whole = st.wholeValue === undefined ? "note" : st.wholeValue;
+        if (whole !== false && p.sameValue && (p.body || st.integrandInRange !== false)) {
+            state.valueRight = true;
+            if (whole === "note") add("note", "note-same-value", { what: what }, []);
+            return;
+        }
+        if (p.swapped) {
+            add("error", "swapped-bounds", { what: what }, [sv.lower, sv.upper]);
+        } else {
+            if (!p.lower) add("error", "wrong-lower-bound", { what: what }, [sv.lower]);
+            if (!p.upper) add("error", "wrong-upper-bound", { what: what }, [sv.upper]);
+        }
+        if (!p.body) add("error", "wrong-body", { what: what }, [sv.integrand]);
+    }
+
+    function compareIndexed(sv, rv, st) {
+        const what = rv.type;
+        const p = indexedParts(sv, rv, ctx);
+        if (p.unsupported) {
+            /* a part that cannot be computed: the written form decides */
+            if (equivalenceStep(sv, rv, rules) >= 0) state.valueRight = true;
+            else add("error", "wrong-value", {}, [sv]);
+            return;
+        }
+        if (p.sIndex !== p.rIndex && st.renameBoundVariable === false) add("error", "wrong-index-variable", { what: what }, [sv.indexVariable]);
+        if (p.start && p.end && p.body) { state.valueRight = true; return; }
+        if (p.shift !== null) {
+            const level = st.indexShift === undefined ? "note" : st.indexShift;
+            state.valueRight = true;
+            if (level === "note") add("note", "note-index-shift", { what: what }, []);
+            else if (level === false) add("error", "index-shift-not-accepted", { what: what }, [sv]);
+            return;
+        }
+        const whole = st.wholeValue === undefined ? "note" : st.wholeValue;
+        if (whole !== false && p.sameValue) {
+            state.valueRight = true;
+            if (whole === "note") add("note", "note-same-value", { what: what }, []);
+            return;
+        }
+        if (p.partial) {
+            /* the index shifted in the body and one bound: the other bound is the error */
+            if (p.partial.part === "end") add("error", p.partial.off ? "upper-bound-off-by-one" : "wrong-upper-bound", { what: what }, [sv.end]);
+            else add("error", p.partial.off ? "lower-bound-off-by-one" : "wrong-lower-bound", { what: what }, [sv.start]);
+            return;
+        }
+        if (p.swapped) {
+            add("error", "swapped-bounds", { what: what }, [sv.start, sv.end]);
+        } else {
+            if (!p.start) add("error", p.startOff ? "lower-bound-off-by-one" : "wrong-lower-bound", { what: what }, [sv.start]);
+            if (!p.end) add("error", p.endOff ? "upper-bound-off-by-one" : "wrong-upper-bound", { what: what }, [sv.end]);
+        }
+        if (!p.body) add("error", p.bodyNoIndex ? "body-without-index" : "wrong-body", { what: what, index: latex(sv.indexVariable) }, [sv.body]);
+    }
+
     let refKind = rules.answerKind && rules.answerKind !== "auto" ? rules.answerKind : kindOf(r);
     let stuKind = kindOf(s);
     let sAns = s;
@@ -2161,7 +2614,9 @@ function compareOne(student, reference, rules, options, debug) {
         return { items: items, state: state };
     }
 
-    if (refKind === "expression") {
+    if (refKind === "expression" && compareStructures(sAns, r)) {
+        /* a Σ / Π in the reference: compared by its form and its parts (compareStructures added the items) */
+    } else if (refKind === "expression") {
         /* units: missing, of another kind, or another unit of the same kind (converted to the reference's) */
         const units = compareUnits(options.studentUnit, options.referenceUnit, rules);
         if (units) {

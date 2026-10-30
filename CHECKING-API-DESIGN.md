@@ -223,6 +223,31 @@ Part by part (ANSWER-CHECKING 5.3); per part a rule:
 | `limitDirection` | a missing / wrong one-sided direction | `error` |
 | `wholeValueFallback` | parts differ but the whole value is equal (`2∫f` = `∫2f`): accept, with a note | on |
 | `requireConstant` | an indefinite integral without `+C` | `error` |
+| `sameForm` | the reference is a Σ / Π / ∫ / lim: the student's answer must be one too - the computed number (385 for `Σ_{k=1}^{10}k²`) or another expression of the same value (`2·Σk` for `Σ2k`) gives `not-same-form` (rubric category `structureForm`: its own penalty, or fatal). `"root"`: the answer itself is that structure; `"contains"`: it has one somewhere; `false`: any form of the right value | `"root"` |
+| `indexShift` | `Σ_{k=0}^{9}(k+1)²` for `Σ_{k=1}^{10}k²` (bounds and body shifted by the same d) | `"note"` |
+
+**Σ / Π compared part by part (built in 0.9.0, 2026-10-30; ∫ and lim not yet).** In the code the rules are
+`rules.structures.{sameForm, renameBoundVariable, indexShift, wholeValue}` (`wholeValue` = `wholeValueFallback` above,
+true | "note" | false, default "note"); a finite Σ / Π is also computed (a loop, at most 1000 terms), so it is compared by
+value inside an expression (1 + Σ…). The parts `indexVariable`, `start`, `end`, `body`, in this order:
+1. The same operator (Σ for Π: `not-same-form`).
+2. Each part: the index renamed to the reference's (`renameBoundVariable`); start and end by value (a parameter such as
+   `n` sampled as a positive integer, `∞` only equals `∞`); the body by value with the index sampled only at integers
+   inside the range (`(−1)^k` = `cos πk`). Errors: `wrong-lower-bound`, `wrong-upper-bound` (with "off by one" when
+   the difference is ±1), `swapped-bounds`, `wrong-body`, `body-without-index` (`Σ_{k=1}^{n} n²`),
+   `wrong-index-variable` (only when renaming is off).
+3. An index shift (`indexShift`): d = start difference, the end differs by d, body_s(k + d) = body_r(k); also for ∞.
+4. The whole value (`wholeValueFallback`, finite bounds only, a loop up to ~1000 terms): equal → accepted with a note,
+   unless `sameForm` rejects the form.
+The value and the form are separate: a right value in another form gets only `not-same-form`; a Σ with a wrong part
+gets that part's error. Rubric categories: `bounds`, `body`, `indexVariable`, `structureForm` - each its own rule.
+**∫ (built in 0.10.0).** The parts: the `dx` (missing: `missing-differential`; another letter: `wrong-integration-variable`
+when renaming is off - category `indexVariable`), definite or not (`missing-limits` / `extra-limits`, category `bounds`),
+the limits by value (∞ / −∞; `swapped-bounds`), the integrand by value at points inside the reference's limits
+(`integrandInRange`, default true: ∫₀¹|x|dx = ∫₀¹x dx; false: in the variable's range, and `wholeValue` does not save another
+integrand). Definite with finite limits: also computed (adaptive Simpson), so `1/3` for ∫₀¹x²dx is `not-same-form` and another
+integrand of the same value is `wholeValue`. Indefinite or improper: the parts only (`x³/3` for ∫x²dx: a wrong value).
+lim not yet (target, direction, body).
 
 ### 3.8 Numbers - decimals, precision, notation
 | Key | Meaning |

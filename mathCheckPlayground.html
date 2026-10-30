@@ -322,6 +322,17 @@ main[hidden] { display: none; }
     <div class="grid" id="laws"></div>
     <h3>Forms of solutions and excluded values</h3>
     <div class="grid" id="valueSetForms"></div>
+    <h3>Σ / Π / ∫</h3>
+    <div class="grid">
+      <label title="The reference is a Σ / Π: must the answer be one? The computed number (385 for Σk²) is the right value in another form: rubric category structureForm">Form of the answer
+        <select id="stSameForm"><option value="root">must be one Σ</option><option value="contains">must contain a Σ (2·Σk)</option><option value="false">any form of the value</option></select></label>
+      <label class="check" title="Σ_n n² for Σ_k k² - off: rubric category indexVariable"><input type="checkbox" id="stRename" checked> Another index letter</label>
+      <label title="Σ_{k=0}^{9}(k+1)² for Σ_{k=1}^{10}k² - not accepted: rubric category structureForm">Shifted index
+        <select id="stShift"><option value="true">accept</option><option value="note" selected>accept + note</option><option value="false">not accepted</option></select></label>
+      <label title="Other limits or body with the same value (Σ_{k=0}^{10}k² for Σ_{k=1}^{10}k²; finite limits only) - not accepted: the errors of the parts">Same value, other parts
+        <select id="stWhole"><option value="true">accept</option><option value="note" selected>accept + note</option><option value="false">not accepted</option></select></label>
+      <label class="check" title="∫ with limits: the integrand compared only between the limits (∫₀¹|x|dx = ∫₀¹x dx) - off: everywhere, and the same value does not accept another integrand"><input type="checkbox" id="stInRange" checked> ∫ integrand only inside the limits</label>
+    </div>
     <h3>Form checks (only when the value is right)</h3>
     <div class="grid" id="forms"></div>
     <div class="grid" style="margin-top:6px"><label>Isolated variable <input type="text" id="isolated" size="4" placeholder="x"></label></div>
@@ -409,6 +420,10 @@ const CATEGORIES = [
     ["commaList", "A comma for ∨ / ∧ / a set, when not accepted: x = 1, 5 · x ≠ 1, 5 · x < 1, x = 3 (not set: as form)"],
     ["relation", "Wrong relation: x < 4 for x ≤ 4, ∉ for ∈"],
     ["direction", "Inequality the wrong way: x > 4 for x < 4"],
+    ["structureForm", "Not the form of the reference: 385 for Σk², Π for Σ, a shifted index when not accepted"],
+    ["bounds", "A wrong limit of a Σ / Π / ∫: wrong, off by one, swapped; ∫ limits missing or not expected"],
+    ["body", "The expression inside a Σ / Π / ∫ is wrong, or (Σ) does not use the index"],
+    ["indexVariable", "Another index letter or dx variable when not accepted; no dx"],
     ["elements", "Missing / extra element of a set, list, statement"],
     ["order", "Elements in the wrong order (tuple)"],
     ["precision", "Wrong number of decimals"],
@@ -557,6 +572,13 @@ function readRules() {
         diagnosis: $("diagnosis").checked,
         feedback: { nameMissing: $("nameMissing").checked },
         plusMinus: { oneValue: $("pmOneValue").value },
+        structures: {
+            sameForm: $("stSameForm").value === "false" ? false : $("stSameForm").value,
+            renameBoundVariable: $("stRename").checked,
+            indexShift: $("stShift").value === "note" ? "note" : $("stShift").value === "true",
+            wholeValue: $("stWhole").value === "note" ? "note" : $("stWhole").value === "true",
+            integrandInRange: $("stInRange").checked
+        },
         units: $("unitsMode").value === "strict" ? { otherUnits: true, strict: true }
             : { otherUnits: $("unitsMode").value === "note" ? "note" : true, strict: false }
     };
@@ -986,6 +1008,12 @@ function writeRules(rules) {
     $("nameMissing").checked = r.feedback.nameMissing !== false;
     $("unitsMode").value = r.units.strict === true || r.units.otherUnits === false ? "strict" : r.units.otherUnits === "note" ? "note" : "true";
     $("pmOneValue").value = r.plusMinus.oneValue === "wrong" ? "wrong" : "partial";
+    const st = r.structures || {};
+    $("stSameForm").value = st.sameForm === false ? "false" : st.sameForm === "contains" ? "contains" : "root";
+    $("stRename").checked = st.renameBoundVariable !== false;
+    $("stShift").value = st.indexShift === "note" || st.indexShift === undefined ? "note" : String(st.indexShift !== false);
+    $("stWhole").value = st.wholeValue === "note" || st.wholeValue === undefined ? "note" : String(st.wholeValue !== false);
+    $("stInRange").checked = st.integrandInRange !== false;
     document.querySelectorAll("[data-law]").forEach(function (s) {
         const v = r.equivalence[s.dataset.law];
         s.value = v === "note" ? "note" : String(v !== false);

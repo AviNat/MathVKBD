@@ -284,6 +284,50 @@ const SECTIONS = [
     ]
 },
 {
+    id: "structures", title: { en: "Σ, Π and ∫" },
+    intro: { en: "A Σ (or Π) is compared part by part: the index, the lower and upper limits (by value; a parameter such as n is a positive integer; ∞ only equals ∞) and the expression inside (by value at the integers of the range, so (−1)^k equals cos πk). Each wrong part costs the points of its rubric category: bounds (wrong, off by one, swapped) or body (wrong, or does not use the index). A finite Σ is also computed, so its value can be compared." },
+    items: [
+        {
+            id: "structures.sameForm", path: "rules.structures.sameForm", values: "\"root\" (default) | \"contains\" | false",
+            text: { en: "The reference is a Σ: must the answer be one? root: the answer is one Σ. contains: it has a Σ somewhere (2·Σk for Σ2k). false: any form with the right value. The computed number (385 for Σ_{k=1}^{10}k²) has the right value in another form: not-same-form, rubric category structureForm (its own points, or fatal)." },
+            examples: [
+                { caption: "385 for Σ_{k=1}^{10}k²", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "385", expect: { grade: 50, codes: ["not-same-form"] } },
+                { caption: "the same, sameForm false", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "385", rules: { structures: { sameForm: false } }, expect: { grade: 100 } }
+            ]
+        },
+        {
+            id: "structures.renameBoundVariable", path: "rules.structures.renameBoundVariable", values: "true (default) | false",
+            text: { en: "Another index letter is the same Σ: Σ_n n² for Σ_k k². false: an error, rubric category indexVariable." },
+            examples: [
+                { caption: "Σ_n n² for Σ_k k², not accepted", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "sum<indexVariable=n start=1 end=10 body=(^ n 2)>", rules: { structures: { renameBoundVariable: false } }, expect: { grade: 75, codes: ["wrong-index-variable"] } }
+            ]
+        },
+        {
+            id: "structures.indexShift", path: "rules.structures.indexShift", values: "true | \"note\" (default) | false",
+            text: { en: "The limits moved by the same number and the expression inside moved back: Σ_{k=0}^{9}(k+1)² for Σ_{k=1}^{10}k² (also to ∞). false: an error, rubric category structureForm." },
+            examples: [
+                { caption: "Σ_{k=0}^{9}(k+1)² for Σ_{k=1}^{10}k²", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "sum<indexVariable=k start=0 end=9 body=(^ (+ k 1) 2)>", expect: { grade: 100, notes: ["note-index-shift"] } }
+            ]
+        },
+        {
+            id: "structures.wholeValue", path: "rules.structures.wholeValue", values: "true | \"note\" (default) | false",
+            text: { en: "Other limits or another expression inside, with the same value (finite limits only): Σ_{k=0}^{10}k² for Σ_{k=1}^{10}k² (0² = 0). false: the errors of the parts." },
+            examples: [
+                { caption: "∫₀¹(2x − 2/3)dx for ∫₀¹x²dx: the same value, noted", ref: "integral<lower=0 upper=1 integrand=(^ x 2) variable=x>", student: "integral<lower=0 upper=1 integrand=(+ (* 2 x) (neg (/ 2 3))) variable=x>", expect: { grade: 100, notes: ["note-same-value"] } },
+                { caption: "Σ_{k=0}^{10}k², not accepted: the lower limit is off by one", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "sum<indexVariable=k start=0 end=10 body=(^ k 2)>", rules: { structures: { wholeValue: false } }, expect: { grade: 75, codes: ["lower-bound-off-by-one"] } }
+            ]
+        },
+        {
+            id: "structures.integrandInRange", path: "rules.structures.integrandInRange", values: "true (default) | false",
+            text: { en: "An integral with limits: the integrand is compared only between the limits, so ∫₀¹|x|dx is ∫₀¹x dx. false: it must be the same everywhere, and the same value does not accept another integrand. An integral without limits, or with ∞, is compared by its parts only (it is not computed); one with finite limits is also computed (adaptive Simpson), so 1/3 for ∫₀¹x²dx is the right value in another form (structures.sameForm)." },
+            examples: [
+                { caption: "∫₀¹|x|dx for ∫₀¹x dx", ref: "integral<lower=0 upper=1 integrand=x variable=x>", student: "integral<lower=0 upper=1 integrand=abs(x) variable=x>", expect: { grade: 100 } },
+                { caption: "the same, integrandInRange false", ref: "integral<lower=0 upper=1 integrand=x variable=x>", student: "integral<lower=0 upper=1 integrand=abs(x) variable=x>", rules: { structures: { integrandInRange: false } }, expect: { grade: 50, codes: ["wrong-body"] } }
+            ]
+        }
+    ]
+},
+{
     id: "collections", title: { en: "Sets, lists and x ∈ A" },
     intro: { en: "Sets and lists are compared element by element in any order; each missing or extra element is named in the feedback (feedback.nameMissing) and costs the points of the rubric category elements. The same for the set in x ∈ {…}." },
     items: [
@@ -468,6 +512,14 @@ const SECTIONS = [
             text: { en: "An inequality the wrong way (x > 3 for x < 3); graded apart from the wrong relation." },
             examples: [{ caption: "x > 3 for x < 3, direction once 60", ref: "(less x 3)", student: "(greater x 3)", rubric: { categories: { direction: { mode: "once", points: 60 } } }, expect: { grade: 40, codes: ["wrong-direction"] } }]
         },
+        { id: "rubric.categories.structureForm", path: "rubric.categories.structureForm", values: "default once, 50", text: { en: "Not the form of the reference (structures.sameForm): the computed number for a Σ, Π for Σ, a shifted index when not accepted." } },
+        {
+            id: "rubric.categories.bounds", path: "rubric.categories.bounds", values: "default each, 25, max 50",
+            text: { en: "A wrong limit of a Σ / Π: wrong, off by one, or the two limits swapped." },
+            examples: [{ caption: "Σ_{k=1}^{11} for Σ_{k=1}^{10}", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", expect: { grade: 75, codes: ["upper-bound-off-by-one"] } }]
+        },
+        { id: "rubric.categories.body", path: "rubric.categories.body", values: "default once, 50", text: { en: "The expression inside a Σ / Π is wrong, or does not use the index (Σ_{k=1}^{n} n²)." } },
+        { id: "rubric.categories.indexVariable", path: "rubric.categories.indexVariable", values: "default once, 25", text: { en: "Another index letter when structures.renameBoundVariable is false." } },
         {
             id: "rubric.categories.elements", path: "rubric.categories.elements", values: "default each, 25, max 100",
             text: { en: "A missing or extra element of a set, list or tuple, or a missing or extra part of an and / or answer." },

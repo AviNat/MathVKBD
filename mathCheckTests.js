@@ -16,7 +16,7 @@
 
 /* ---------------- the notation -> semantic AST ---------------- */
 const RELATIONS = ["less", "greater", "lessEqual", "greaterEqual", "notEqual", "approximate", "equal", "memberOf", "notMemberOf"];
-const CONSTANTS = ["pi", "e", "i"];
+const CONSTANTS = ["pi", "e", "i", "infinity"];
 
 function parse(text) {
     if (text === null || text === undefined) return null;
@@ -130,6 +130,12 @@ function parseNode(text) {
 
 /* ---------------- the cases ---------------- */
 const FORM = function (name, level) { const f = {}; f[name] = level || "error"; return { form: f }; };
+
+const SUM10 = "sum<indexVariable=k start=1 end=10 body=(^ k 2)>";
+const INT01 = "integral<lower=0 upper=1 integrand=(^ x 2) variable=x>";
+const INT_X2 = "integral<lower=∅ upper=∅ integrand=(^ x 2) variable=x>";
+const INT_INF = "integral<lower=1 upper=infinity integrand=(/ 1 (^ x 2)) variable=x>";
+const SUM_INF ="sum<indexVariable=n start=0 end=infinity body=(/ 1 (^ 2 n))>";
 
 const CASES = [
     /* the equivalence ladder: the first step at which the answers are the same */
@@ -373,6 +379,11 @@ const CASES = [
     { group: "Statements", name: "x < 1, x = 3 for x < 1 ∨ x = 3: noted (default)", ref: "(or (less x 1) x) ‖ 3", student: "list[(less x 1), x] ‖ 3", expect: { grade: 100, notes: ["statement-list"], feedbackIncludes: "x<1\\lor x=3" } },
     { group: "Statements", name: "x < 1, x = 3 accepted (statements.list true)", ref: "(or (less x 1) x) ‖ 3", student: "list[(less x 1), x] ‖ 3", rules: { statements: { list: true } }, expect: { grade: 100, codes: [] } },
     { group: "Statements", name: "x < 1, x = 3 not accepted: a form error", ref: "(or (less x 1) x) ‖ 3", student: "list[(less x 1), x] ‖ 3", rules: { statements: { list: false } }, expect: { grade: 90, codes: ["statement-list"] } },
+    /* x < 1 ∨ x = 3 ∨ x > 5 ∧ x < 7, typed: the keyboard's "=" splits the root; the student's commas for the ∨ */
+    { group: "Statements", name: "x < 1, x = 3, x > 5 ∧ x < 7 for ∨: note", ref: "(or (less x 1) x) ‖ (or 3 (and (greater x 5) (less x 7)))", student: "list[(less x 1), x] ‖ list[3, (and (greater x 5) (less x 7))]", expect: { grade: 100, codes: [], notes: ["statement-list"], feedbackIncludes: "not a proper form" } },
+    { group: "Statements", name: "x < 1, x = 3, x > 5 ∧ x < 7 for ∨: accepted", ref: "(or (less x 1) x) ‖ (or 3 (and (greater x 5) (less x 7)))", student: "list[(less x 1), x] ‖ list[3, (and (greater x 5) (less x 7))]", rules: { statements: { list: true } }, expect: { grade: 100, codes: [] } },
+    { group: "Statements", name: "x < 1, x = 3, x > 5 ∧ x < 7 for ∨: not accepted", ref: "(or (less x 1) x) ‖ (or 3 (and (greater x 5) (less x 7)))", student: "list[(less x 1), x] ‖ list[3, (and (greater x 5) (less x 7))]", rules: { statements: { list: false } }, expect: { grade: 90, codes: ["statement-list"] } },
+    { group: "Statements", name: "x < 1 ∨ x = 3 ∨ x > 5 ∧ x < 7, typed the same", ref: "(or (less x 1) x) ‖ (or 3 (and (greater x 5) (less x 7)))", student: "(or (less x 1) x) ‖ (or 3 (and (less x 7) (greater x 5)))", expect: { grade: 100, codes: [] } },
     { group: "Statements", name: "x < 1, x = 3 not accepted, rubric commaList 40: partial 60", ref: "(or (less x 1) x) ‖ 3", student: "list[(less x 1), x] ‖ 3", rules: { statements: { list: false } }, rubric: { categories: { value: { mode: "once", points: 100 }, commaList: { mode: "once", points: 40 } } }, expect: { grade: 60, codes: ["statement-list"], feedbackIncludes: "Commas" } },
     { group: "Solutions", name: "x = 1, 5 not accepted, rubric commaList 25", ref: "(or (equal x 1) (equal x 5))", student: "x ‖ list[1, 5]", rules: { solutions: { list: false } }, rubric: { categories: { value: { mode: "once", points: 100 }, commaList: { mode: "once", points: 25 } } }, expect: { grade: 75, codes: ["solution-list"] } },
     { group: "Statements", name: "x < 1, x = 4 for x < 1 ∨ x = 3: a part wrong", ref: "(or (less x 1) x) ‖ 3", student: "list[(less x 1), x] ‖ 4", expect: { codes: ["missing-statement", "extra-statement"] } },
@@ -428,6 +439,81 @@ const CASES = [
     /* chains */
     { group: "Chains", name: "an expression answered as steps: the last is graded", ref: "(* 2 x)", student: "(+ x x) ‖ (* 2 x)", expect: { grade: 100, notes: ["note-last-step"] } },
     { group: "Chains", name: "all steps: a wrong middle step", ref: "(^ (+ x 1) 2) ‖ (+ (^ x 2) (* 2 x) 1)", student: "(^ (+ x 1) 2) ‖ (+ (^ x 2) 1) ‖ (+ (^ x 2) (* 2 x) 1)", rules: { answerKind: "derivation", statements: { derivation: "allSteps" } }, expect: { grade: 80, codes: ["wrong-step"] } },
+
+    /* Σ / Π part by part (2026-10-30, CHECKING-API-DESIGN 3.7): the form (structures.sameForm), the bounds, the body */
+    { group: "Sums", name: "Σ k² (1..10): the same", ref: SUM10, student: SUM10, expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "Σ n² for Σ k²: another index letter", ref: SUM10, student: "sum<indexVariable=n start=1 end=10 body=(^ n 2)>", expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "another index letter, renaming not accepted", ref: SUM10, student: "sum<indexVariable=n start=1 end=10 body=(^ n 2)>", rules: { structures: { renameBoundVariable: false } }, expect: { grade: 75, codes: ["wrong-index-variable"], feedbackIncludes: "index variable of the sum" } },
+    { group: "Sums", name: "the body in another form: (k+1)² as k²+2k+1, end n", ref: "sum<indexVariable=k start=1 end=n body=(^ (+ k 1) 2)>", student: "sum<indexVariable=k start=1 end=n body=(+ (^ k 2) (* 2 k) 1)>", expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "(−1)^k as cos(πk): equal at the integers", ref: "sum<indexVariable=k start=0 end=n body=(* (^ (neg 1) k) k)>", student: "sum<indexVariable=k start=0 end=n body=(* cos((* pi k)) k)>", expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "385 for Σ k²: the value, not the form", ref: SUM10, student: "385", expect: { grade: 50, codes: ["not-same-form"], feedbackIncludes: "in the form of the sum" } },
+    { group: "Sums", name: "385 for Σ k², sameForm false", ref: SUM10, student: "385", rules: { structures: { sameForm: false } }, expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "385 for Σ k², structureForm fatal", ref: SUM10, student: "385", rubric: { fatal: ["structureForm"] }, expect: { grade: 0, codes: ["not-same-form"] } },
+    { group: "Sums", name: "384 for Σ k²: a wrong value", ref: SUM10, student: "384", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Sums", name: "Σ_{k=0}^{9}(k+1)²: the index shifted, noted", ref: SUM10, student: "sum<indexVariable=k start=0 end=9 body=(^ (+ k 1) 2)>", expect: { grade: 100, notes: ["note-index-shift"] } },
+    { group: "Sums", name: "the index shifted, not accepted", ref: SUM10, student: "sum<indexVariable=k start=0 end=9 body=(^ (+ k 1) 2)>", rules: { structures: { indexShift: false } }, expect: { grade: 50, codes: ["index-shift-not-accepted"] } },
+    { group: "Sums", name: "Σ_{n=1}^{10} 1/2^(n−1) for Σ_{n=0}^{10} 1/2^n: shifted, the end not", ref: "sum<indexVariable=n start=0 end=10 body=(/ 1 (^ 2 n))>", student: "sum<indexVariable=n start=1 end=10 body=(/ 1 (^ 2 (+ n (neg 1))))>", expect: { grade: 75, codes: ["upper-bound-off-by-one"] } },
+    { group: "Sums", name: "Σ_{n=1}^{11} 1/2^(n−1) for Σ_{n=0}^{10} 1/2^n: shifted right", ref: "sum<indexVariable=n start=0 end=10 body=(/ 1 (^ 2 n))>", student: "sum<indexVariable=n start=1 end=11 body=(/ 1 (^ 2 (+ n (neg 1))))>", expect: { grade: 100, notes: ["note-index-shift"] } },
+    { group: "Sums", name: "Σ_{n=0}^{11} 1/2^(n−1): shifted with the end, the start not", ref: "sum<indexVariable=n start=0 end=10 body=(/ 1 (^ 2 n))>", student: "sum<indexVariable=n start=0 end=11 body=(/ 1 (^ 2 (+ n (neg 1))))>", expect: { grade: 75, codes: ["lower-bound-off-by-one"] } },
+    { group: "Sums", name: "Σ_{k=2}^{10} 1 for Σ_{k=1}^{10} 1: the start (the body fits any shift)", ref: "sum<indexVariable=k start=1 end=10 body=1>", student: "sum<indexVariable=k start=2 end=10 body=1>", expect: { grade: 75, codes: ["lower-bound-off-by-one"] } },
+    { group: "Sums", name: "Σ_{n=1}^{∞} 1/2^(n−1) for Σ_{n=0}^{∞} 1/2^n: shifted", ref: SUM_INF, student: "sum<indexVariable=n start=1 end=infinity body=(/ 1 (^ 2 (+ n (neg 1))))>", expect: { grade: 100, notes: ["note-index-shift"] } },
+    { group: "Sums", name: "Σ_{n=1}^{∞} 1/2^n for Σ_{n=0}^{∞} 1/2^n: the start", ref: SUM_INF, student: "sum<indexVariable=n start=1 end=infinity body=(/ 1 (^ 2 n))>", expect: { grade: 75, codes: ["lower-bound-off-by-one"] } },
+    { group: "Sums", name: "Σ_{n=1}^{10} 1/2^(n−1) for Σ to ∞: shifted, the end not ∞", ref: SUM_INF, student: "sum<indexVariable=n start=1 end=10 body=(/ 1 (^ 2 (+ n (neg 1))))>", expect: { grade: 75, codes: ["wrong-upper-bound"] } },
+    { group: "Sums", name: "2 for Σ_{n=0}^{∞} 1/2^n: an infinite Σ is not computed - a wrong value", ref: SUM_INF, student: "2", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Sums", name: "end 11: off by one", ref: SUM10, student: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", expect: { grade: 75, codes: ["upper-bound-off-by-one"], feedbackIncludes: "upper limit of the sum is off by one" } },
+    { group: "Sums", name: "end 20: a wrong upper limit", ref: SUM10, student: "sum<indexVariable=k start=1 end=20 body=(^ k 2)>", expect: { grade: 75, codes: ["wrong-upper-bound"] } },
+    { group: "Sums", name: "start 2 and end 11: both limits", ref: SUM10, student: "sum<indexVariable=k start=2 end=11 body=(^ k 2)>", rules: { structures: { indexShift: false, wholeValue: false } }, expect: { grade: 50, codes: ["lower-bound-off-by-one", "upper-bound-off-by-one"] } },
+    { group: "Sums", name: "start 0: the same value (0² = 0), noted", ref: SUM10, student: "sum<indexVariable=k start=0 end=10 body=(^ k 2)>", expect: { grade: 100, notes: ["note-same-value"] } },
+    { group: "Sums", name: "start 0, wholeValue false: off by one", ref: SUM10, student: "sum<indexVariable=k start=0 end=10 body=(^ k 2)>", rules: { structures: { wholeValue: false } }, expect: { grade: 75, codes: ["lower-bound-off-by-one"] } },
+    { group: "Sums", name: "the limits swapped", ref: SUM10, student: "sum<indexVariable=k start=10 end=1 body=(^ k 2)>", expect: { grade: 75, codes: ["swapped-bounds"] } },
+    { group: "Sums", name: "Σ k³ for Σ k²: a wrong body", ref: SUM10, student: "sum<indexVariable=k start=1 end=10 body=(^ k 3)>", expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Sums", name: "Σ n² (k = 1..n): the body without the index", ref: "sum<indexVariable=k start=1 end=n body=(^ k 2)>", student: "sum<indexVariable=k start=1 end=n body=(^ n 2)>", expect: { grade: 50, codes: ["body-without-index"] } },
+    { group: "Sums", name: "rubric: bounds 10, body 40", ref: SUM10, student: "sum<indexVariable=k start=1 end=11 body=(^ k 3)>", rubric: { categories: { bounds: { mode: "once", points: 10 }, body: { mode: "once", points: 40 } } }, expect: { grade: 50, codes: ["upper-bound-off-by-one", "wrong-body"] } },
+    { group: "Sums", name: "Π for Σ: the wrong operation", ref: SUM10, student: "product<indexVariable=k start=1 end=10 body=(^ k 2)>", expect: { grade: 50, codes: ["wrong-operator"] } },
+    { group: "Sums", name: "Σ 1/k² to ∞, another index", ref: "sum<indexVariable=k start=1 end=infinity body=(/ 1 (^ k 2))>", student: "sum<indexVariable=n start=1 end=infinity body=(/ 1 (^ n 2))>", expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "Σ to ∞, the index shifted", ref: "sum<indexVariable=k start=1 end=infinity body=(/ 1 (^ k 2))>", student: "sum<indexVariable=k start=0 end=infinity body=(/ 1 (^ (+ k 1) 2))>", expect: { grade: 100, notes: ["note-index-shift"] } },
+    { group: "Sums", name: "Σ to 10 for Σ to ∞", ref: "sum<indexVariable=k start=1 end=infinity body=(/ 1 (^ k 2))>", student: "sum<indexVariable=k start=1 end=10 body=(/ 1 (^ k 2))>", expect: { grade: 75, codes: ["wrong-upper-bound"] } },
+    { group: "Sums", name: "2·Σk for Σ2k: not one Σ (sameForm root)", ref: "sum<indexVariable=k start=1 end=10 body=(* 2 k)>", student: "(* 2 sum<indexVariable=k start=1 end=10 body=k>)", expect: { grade: 50, codes: ["not-same-form"] } },
+    { group: "Sums", name: "2·Σk for Σ2k, sameForm contains", ref: "sum<indexVariable=k start=1 end=10 body=(* 2 k)>", student: "(* 2 sum<indexVariable=k start=1 end=10 body=k>)", rules: { structures: { sameForm: "contains" } }, expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "1 + Σ k² as Σ k² + 1", ref: "(+ 1 " + SUM10 + ")", student: "(+ " + SUM10 + " 1)", expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "386 for 1 + Σ k²: not the form", ref: "(+ 1 " + SUM10 + ")", student: "386", expect: { grade: 50, codes: ["not-same-form"] } },
+    { group: "Sums", name: "a Σ with an empty limit", ref: SUM10, student: "sum<indexVariable=k start=1 end=? body=(^ k 2)>", expect: { grade: 0, codes: ["incomplete"] } },
+    { group: "Sums", name: "120 for Π k (1..5), sameForm false", ref: "product<indexVariable=k start=1 end=5 body=k>", student: "120", rules: { structures: { sameForm: false } }, expect: { grade: 100, codes: [] } },
+    { group: "Sums", name: "Σ k² for 385: not evaluated", ref: "385", student: SUM10, expect: { grade: 0, codes: ["not-evaluated"] } },
+    { group: "Sums", name: "Hebrew: the lower limit", ref: SUM10, student: "sum<indexVariable=k start=3 end=10 body=(^ k 2)>", language: "he", expect: { grade: 75, codes: ["wrong-lower-bound"], feedbackIncludes: "הגבול התחתון של הסכום" } },
+
+    /* ∫ part by part, and by value when definite with finite limits (2026-10-30) */
+    { group: "Integrals", name: "∫₀¹ x² dx: the same", ref: INT01, student: INT01, expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "∫₀¹ t² dt: another variable", ref: INT01, student: "integral<lower=0 upper=1 integrand=(^ t 2) variable=t>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "another variable, renaming not accepted", ref: INT01, student: "integral<lower=0 upper=1 integrand=(^ t 2) variable=t>", rules: { structures: { renameBoundVariable: false } }, expect: { grade: 75, codes: ["wrong-integration-variable"] } },
+    { group: "Integrals", name: "∫₀¹ x·x dx: the integrand in another form", ref: INT01, student: "integral<lower=0 upper=1 integrand=(* x x) variable=x>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "1/3 for ∫₀¹ x² dx: the value, not the form", ref: INT01, student: "(/ 1 3)", expect: { grade: 50, codes: ["not-same-form"], feedbackIncludes: "in the form of the integral" } },
+    { group: "Integrals", name: "1/3, sameForm false", ref: INT01, student: "(/ 1 3)", rules: { structures: { sameForm: false } }, expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "1/2 for ∫₀¹ x² dx: a wrong value", ref: INT01, student: "(/ 1 2)", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Integrals", name: "2 for ∫₀^π sin x dx: computed (not the form)", ref: "integral<lower=0 upper=pi integrand=sin(x) variable=x>", student: "2", expect: { grade: 50, codes: ["not-same-form"] } },
+    { group: "Integrals", name: "∫₁⁰: the limits swapped", ref: INT01, student: "integral<lower=1 upper=0 integrand=(^ x 2) variable=x>", expect: { grade: 75, codes: ["swapped-bounds"] } },
+    { group: "Integrals", name: "∫₀² x² dx: a wrong upper limit", ref: INT01, student: "integral<lower=0 upper=2 integrand=(^ x 2) variable=x>", expect: { grade: 75, codes: ["wrong-upper-bound"], feedbackIncludes: "upper limit of the integral" } },
+    { group: "Integrals", name: "∫₀¹ x³ dx: a wrong integrand", ref: INT01, student: "integral<lower=0 upper=1 integrand=(^ x 3) variable=x>", expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Integrals", name: "2∫₀¹ x dx for ∫₀¹ 2x dx: not one ∫", ref: "integral<lower=0 upper=1 integrand=(* 2 x) variable=x>", student: "(* 2 integral<lower=0 upper=1 integrand=x variable=x>)", expect: { grade: 50, codes: ["not-same-form"] } },
+    { group: "Integrals", name: "2∫₀¹ x dx for ∫₀¹ 2x dx, sameForm contains", ref: "integral<lower=0 upper=1 integrand=(* 2 x) variable=x>", student: "(* 2 integral<lower=0 upper=1 integrand=x variable=x>)", rules: { structures: { sameForm: "contains" } }, expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "∫₀¹ |x| dx for ∫₀¹ x dx: equal inside the limits", ref: "integral<lower=0 upper=1 integrand=x variable=x>", student: "integral<lower=0 upper=1 integrand=abs(x) variable=x>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "∫₀¹ |x| dx, integrandInRange false", ref: "integral<lower=0 upper=1 integrand=x variable=x>", student: "integral<lower=0 upper=1 integrand=abs(x) variable=x>", rules: { structures: { integrandInRange: false } }, expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Integrals", name: "∫₀¹ (2x − 2/3) dx: another integrand, the same value", ref: INT01, student: "integral<lower=0 upper=1 integrand=(+ (* 2 x) (neg (/ 2 3))) variable=x>", expect: { grade: 100, notes: ["note-same-value"] } },
+    { group: "Integrals", name: "the same, wholeValue false", ref: INT01, student: "integral<lower=0 upper=1 integrand=(+ (* 2 x) (neg (/ 2 3))) variable=x>", rules: { structures: { wholeValue: false } }, expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Integrals", name: "∫ x² dx for ∫₀¹ x² dx: the limits missing", ref: INT01, student: "integral<lower=∅ upper=∅ integrand=(^ x 2) variable=x>", expect: { grade: 75, codes: ["missing-limits"] } },
+    { group: "Integrals", name: "∫₀¹ x² dx for ∫ x² dx: limits not expected", ref: INT_X2, student: INT01, expect: { grade: 75, codes: ["extra-limits"] } },
+    { group: "Integrals", name: "∫ t² dt for ∫ x² dx (indefinite)", ref: INT_X2, student: "integral<lower=∅ upper=∅ integrand=(^ t 2) variable=t>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "∫ x³ dx for ∫ x² dx", ref: INT_X2, student: "integral<lower=∅ upper=∅ integrand=(^ x 3) variable=x>", expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Integrals", name: "x³/3 for ∫ x² dx: no value to compare", ref: INT_X2, student: "(/ (^ x 3) 3)", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Integrals", name: "no dx", ref: INT01, student: "integral<lower=0 upper=1 integrand=(^ x 2) variable=∅>", expect: { grade: 75, codes: ["missing-differential"] } },
+    { group: "Integrals", name: "a limit missing: incomplete", ref: INT01, student: "integral<lower=0 upper=∅ integrand=(^ x 2) variable=x>", expect: { grade: 0, codes: ["incomplete"] } },
+    { group: "Integrals", name: "∫₁^∞ x⁻² dx for ∫₁^∞ 1/x² dx (improper)", ref: INT_INF, student: "integral<lower=1 upper=infinity integrand=(^ x -2) variable=x>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "∫₁^∞ 1/x³ dx: a wrong integrand (improper)", ref: INT_INF, student: "integral<lower=1 upper=infinity integrand=(/ 1 (^ x 3)) variable=x>", expect: { grade: 50, codes: ["wrong-body"] } },
+    { group: "Integrals", name: "∫₁^5 for ∫₁^∞: a wrong upper limit", ref: INT_INF, student: "integral<lower=1 upper=5 integrand=(/ 1 (^ x 2)) variable=x>", expect: { grade: 75, codes: ["wrong-upper-bound"] } },
+    { group: "Integrals", name: "1 for ∫₁^∞ 1/x² dx: improper, not computed - a wrong value", ref: INT_INF, student: "1", expect: { grade: 0, codes: ["wrong-value"] } },
+    { group: "Integrals", name: "a²/2 for ∫₀^a x dx: computed with the parameter", ref: "integral<lower=0 upper=a integrand=x variable=x>", student: "(/ (^ a 2) 2)", expect: { grade: 50, codes: ["not-same-form"] } },
+    { group: "Integrals", name: "∫₀^a t dt for ∫₀^a x dx", ref: "integral<lower=0 upper=a integrand=x variable=x>", student: "integral<lower=0 upper=a integrand=t variable=t>", expect: { grade: 100, codes: [] } },
+    { group: "Integrals", name: "Hebrew: the upper limit", ref: INT01, student: "integral<lower=0 upper=2 integrand=(^ x 2) variable=x>", language: "he", expect: { grade: 75, feedbackIncludes: "הגבול העליון של האינטגרל" } },
 
     /* completeness and kind */
     { group: "Completeness", name: "an empty place", ref: "(+ x 1)", student: "(+ x ?)", expect: { grade: 0, codes: ["incomplete"] } },
