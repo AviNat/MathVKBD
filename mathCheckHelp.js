@@ -460,8 +460,13 @@ const SECTIONS = [
         },
         {
             id: "rubric.categories.relation", path: "rubric.categories.relation", values: "default once, 50",
-            text: { en: "The wrong relation (≤ for <, ∉ for ∈) or the wrong direction (x > 3 for x < 3)." },
+            text: { en: "The wrong relation (≤ for <, ∉ for ∈). The wrong direction has its own category, direction." },
             examples: [{ caption: "x ≤ 3 for x < 3", ref: "(less x 3)", student: "(lessEqual x 3)", expect: { grade: 50, codes: ["wrong-relation"] } }]
+        },
+        {
+            id: "rubric.categories.direction", path: "rubric.categories.direction", values: "default once, 50",
+            text: { en: "An inequality the wrong way (x > 3 for x < 3); graded apart from the wrong relation." },
+            examples: [{ caption: "x > 3 for x < 3, direction once 60", ref: "(less x 3)", student: "(greater x 3)", rubric: { categories: { direction: { mode: "once", points: 60 } } }, expect: { grade: 40, codes: ["wrong-direction"] } }]
         },
         {
             id: "rubric.categories.elements", path: "rubric.categories.elements", values: "default each, 25, max 100",

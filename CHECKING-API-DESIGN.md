@@ -19,7 +19,10 @@ tighter than ∨, ∧ and the comma, as < and ≠ do (x < 1 ∨ (x = 3); x = 1, 
 (true | "note" | false, default "note"): a comma list of statements for a reference joined by ∨ / ∧ (x < 1, x = 3 for
 x < 1 ∨ x = 3) is read with the reference's connective; the comma form gives `statement-list`. Rubric category
 `commaList` for `solution-list`, `exclusion-list` and `statement-list` (a comma for ∨ / ∧ / a set, when the rule does not
-accept it): its own penalty for a partial grade; when the rubric does not set it, graded as `form` (as before). Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
+accept it): its own penalty for a partial grade; when the rubric does not set it, graded as `form` (as before). 0.8.1: rubric category `direction` (`wrong-direction`) apart from `relation`
+(`wrong-relation`), each with its own rule (default once, 50). In an and / or answer, a condition with the same sides as a reference condition
+but another relation (x ≤ 5 ∨ x ≥ 7 for x < 5 ∨ x > 7) gives `wrong-relation` / `wrong-direction` per condition, not
+`missing-statement` + `extra-statement`. Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
 strategies, the rejected options), which stays valid. This document adds what the user asked for on 2026-10-21:
 
 - one function that compares the student's semantic AST with the reference's, usable **in the browser and on a server**;
@@ -303,7 +306,9 @@ rubric = {
 | `term` | `missing-term`, `extra-term` |
 | `scale` | `scale-error` |
 | `form` | `fraction-not-reduced`, `not-simplified`, `not-expanded`, `not-factored`, `not-fully-factored`, `irrational-denominator`, `negative-exponent`, `nested-fraction`, `fraction-form`, `not-exact`, `not-isolated`, `not-standard-form` |
-| `relation` | `wrong-relation`, `comma-for-or` |
+| `relation` | `wrong-relation` (x ≤ 4 for x < 4, ∉ for ∈), `comma-for-or` |
+| `direction` | `wrong-direction` of an inequality (x > 4 for x < 4); its own rule, apart from `relation` (0.8.1) |
+| `commaList` | `solution-list`, `exclusion-list`, `statement-list`; not set in the rubric: graded as `form` (0.8.0) |
 | `elements` | `missing-element`, `extra-element`, `wrong-element`, `duplicate-element`, `missing-row`, `extra-row` |
 | `order` | `wrong-order` (tuples) |
 | `endpoints` | `wrong-endpoint-type` |

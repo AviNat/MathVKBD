@@ -24,7 +24,9 @@
 "use strict";
 
 /* 0.8.0 (2026-10-30): "=" binds tighter than ∨ ∧ and the comma (regroupJoiners); rules.statements.list */
-const VERSION = "0.8.0";
+/* 0.8.1 (2026-10-30): rubric category direction (wrong-direction) apart from relation (wrong-relation), each its own rule;
+   in an and / or answer, a condition with the same sides and another relation is a relation / direction error, not missing + extra */
+const VERSION = "0.8.1";
 
 /* ============================================================
    DEFAULTS
@@ -95,6 +97,7 @@ const DEFAULT_RUBRIC = {
         value: { mode: "once", points: 100 },
         form: { mode: "each", points: 10, max: 30 },
         relation: { mode: "once", points: 50 },
+        direction: { mode: "once", points: 50 },
         elements: { mode: "each", points: 25, max: 100 },
         order: { mode: "once", points: 25 },
         precision: { mode: "once", points: 10 },
@@ -145,7 +148,7 @@ const CATEGORY_OF = {
     "not-isolated": "form",
     "not-equivalent-form": "form",
     "wrong-relation": "relation",
-    "wrong-direction": "relation",
+    "wrong-direction": "direction",
     "missing-element": "elements",
     "extra-element": "elements",
     "duplicate-element": "elements",
@@ -166,6 +169,15 @@ const DIAGNOSIS_CATEGORIES = ["sign", "factor", "scale", "term"];
  * ∨ / ∧ / a set) is a form error unless the teacher gives it its own penalty (2026-10-30)
  */
 const FALLBACK_CATEGORY = { commaList: "form" };
+
+/* the category an error is graded in: the diagnosis and fallback categories the rubric does not set go elsewhere */
+function rubricCategory(code, rubric) {
+    let cat = CATEGORY_OF[code] || "value";
+    /* a diagnosis category the rubric does not set: graded as a wrong value (CHECKING-API-DESIGN 9.2) */
+    if (DIAGNOSIS_CATEGORIES.indexOf(cat) >= 0 && !categoryRule(rubric, cat)) cat = "value";
+    if (FALLBACK_CATEGORY[cat] && !categoryRule(rubric, cat) && rubric.fatal.indexOf(cat) < 0) cat = FALLBACK_CATEGORY[cat];
+    return cat;
+}
 /* categories that cost points even when the teacher's rubric does not list them */
 const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 }, units: { mode: "once", points: 30 }, plusMinus: { mode: "once", points: 50 } };
 
@@ -1226,7 +1238,7 @@ const TEXT = {
         "kind-list": "a list", "kind-derivation": "a chain of steps", "kind-empty": "empty",
         "kind-membership": "a membership (x ∈ A)",
         "cat-value": "Value", "cat-sign": "Sign", "cat-factor": "Factor", "cat-scale": "Scale", "cat-term": "Terms",
-        "cat-form": "Form", "cat-commaList": "Commas", "cat-relation": "Relation", "cat-elements": "Elements", "cat-order": "Order",
+        "cat-form": "Form", "cat-commaList": "Commas", "cat-relation": "Relation", "cat-direction": "Direction", "cat-elements": "Elements", "cat-order": "Order",
         "cat-precision": "Precision", "cat-derivation": "Derivation", "cat-mistake": "Common mistake", "cat-domain": "Domain",
         "cat-incomplete": "Incomplete", "cat-answerType": "Type of answer",
         "detail-like-terms": "combine the like terms", "detail-numbers": "calculate the numbers",
@@ -1325,7 +1337,7 @@ const TEXT = {
         "kind-list": "רשימה", "kind-derivation": "שרשרת שלבים", "kind-empty": "ריקה",
         "kind-membership": "שייכות לקבוצה (x ∈ A)",
         "cat-value": "ערך", "cat-sign": "סימן", "cat-factor": "גורם", "cat-scale": "קנה מידה", "cat-term": "איברים",
-        "cat-form": "צורה", "cat-commaList": "פסיקים", "cat-relation": "יחס", "cat-elements": "איברים", "cat-order": "סדר",
+        "cat-form": "צורה", "cat-commaList": "פסיקים", "cat-relation": "יחס", "cat-direction": "כיוון", "cat-elements": "איברים", "cat-order": "סדר",
         "cat-precision": "דיוק", "cat-derivation": "פיתוח", "cat-mistake": "טעות נפוצה", "cat-domain": "תחום",
         "cat-incomplete": "תשובה חלקית", "cat-answerType": "סוג התשובה",
         "detail-like-terms": "יש לכנס איברים דומים", "detail-numbers": "יש לחשב את המספרים",
@@ -1424,7 +1436,7 @@ const TEXT = {
         "kind-list": "قائمة", "kind-derivation": "سلسلة خطوات", "kind-empty": "فارغة",
         "kind-membership": "انتماء لمجموعة (x ∈ A)",
         "cat-value": "القيمة", "cat-sign": "الإشارة", "cat-factor": "العامل", "cat-scale": "المقياس", "cat-term": "الحدود",
-        "cat-form": "الشكل", "cat-commaList": "الفواصل", "cat-relation": "العلاقة", "cat-elements": "العناصر", "cat-order": "الترتيب",
+        "cat-form": "الشكل", "cat-commaList": "الفواصل", "cat-relation": "العلاقة", "cat-direction": "الاتجاه", "cat-elements": "العناصر", "cat-order": "الترتيب",
         "cat-precision": "الدقة", "cat-derivation": "الاشتقاق", "cat-mistake": "خطأ شائع", "cat-domain": "المجال",
         "cat-incomplete": "إجابة ناقصة", "cat-answerType": "نوع الإجابة",
         "detail-like-terms": "اجمع الحدود المتشابهة", "detail-numbers": "احسب الأعداد",
@@ -1730,7 +1742,7 @@ function statementsEqual(s, r, ctx, out) {
         if (k === null) return false;
         if (ns.op !== nr.op) {
             /* the same sides with another relation: < for ≤ (one error, the relation) */
-            if (out && (k > 0 || nr.op === "notEqual")) out.relation = { actual: ns.op, expected: nr.op };
+            if (out && (k > 0 || nr.op === "notEqual")) out.relation = { actual: s.op, expected: r.op };
             return false;
         }
         const symmetric = nr.op === "notEqual" || nr.op === "approximate" || nr.op === "equal";
@@ -1742,8 +1754,24 @@ function statementsEqual(s, r, ctx, out) {
     if (r.type === "operation" && (r.op === "and" || r.op === "or")) {
         if (!(s.type === "operation" && s.op === r.op)) return false;
         const m = matchUnordered(s.operands, r.operands, function (a, b) { return statementsEqual(a, b, ctx); });
-        if (out) out.match = m;
-        return m.missing.length === 0 && m.extra.length === 0;
+        if (out) {
+            /* a missing condition and an extra one with the same sides: one relation / direction error (x ≤ 5 for x < 5) */
+            m.near = [];
+            m.missing.slice().forEach(function (j) {
+                for (let n = 0; n < m.extra.length; n += 1) {
+                    const o = {};
+                    statementsEqual(s.operands[m.extra[n]], r.operands[j], ctx, o);
+                    if (o.relation || o.direction) {
+                        m.near.push({ student: m.extra[n], reference: j, relation: o.relation, direction: o.direction });
+                        m.missing.splice(m.missing.indexOf(j), 1);
+                        m.extra.splice(n, 1);
+                        break;
+                    }
+                }
+            });
+            out.match = m;
+        }
+        return m.missing.length === 0 && m.extra.length === 0 && (!m.near || m.near.length === 0);
     }
 
     return expressionsEqual(s, r, ctx).equal;
@@ -2179,6 +2207,11 @@ function compareOne(student, reference, rules, options, debug) {
         } else if (out.direction) {
             add("error", "wrong-direction", {}, [s]);
         } else if (out.match) {
+            out.match.near.forEach(function (p) {
+                const sp = s.operands[p.student];
+                if (p.relation) add("error", "wrong-relation", { actual: REL_LATEX[p.relation.actual], expected: REL_LATEX[p.relation.expected] }, [sp]);
+                else add("error", "wrong-direction", {}, [sp]);
+            });
             out.match.missing.forEach(function (j) { add("error", "missing-statement", missingParams("statement", r.operands[j]), []); });
             out.match.extra.forEach(function (i) { add("error", "extra-statement", { statement: latex(s.operands[i]) }, [s.operands[i]]); });
         } else {
@@ -2448,10 +2481,12 @@ function applyRubric(raw, rubric) {
     let total = 0;
 
     /* fatal: grade 0 */
-    const fatal = errors.filter(function (e) { return rubric.fatal.indexOf(CATEGORY_OF[e.code] || e.code) >= 0; });
+    const fatal = errors.filter(function (e) {
+        return rubric.fatal.indexOf(CATEGORY_OF[e.code] || e.code) >= 0 || rubric.fatal.indexOf(rubricCategory(e.code, rubric)) >= 0;
+    });
     if (fatal.length) {
         errors.forEach(function (e) { e.counted = fatal.indexOf(e) >= 0; e.penalty = 0; });
-        return { grade: 0, penalties: [{ category: CATEGORY_OF[fatal[0].code], points: rubric.start, count: fatal.length, capped: false, fatal: true }] };
+        return { grade: 0, penalties: [{ category: rubricCategory(fatal[0].code, rubric), points: rubric.start, count: fatal.length, capped: false, fatal: true }] };
     }
 
     /* a teacher mistake with its own points: that grade */
@@ -2464,10 +2499,7 @@ function applyRubric(raw, rubric) {
 
     const byCategory = {};
     errors.forEach(function (e) {
-        let cat = CATEGORY_OF[e.code] || "value";
-        /* a diagnosis category the rubric does not set: graded as a wrong value (CHECKING-API-DESIGN 9.2) */
-        if (DIAGNOSIS_CATEGORIES.indexOf(cat) >= 0 && !categoryRule(rubric, cat)) cat = "value";
-        if (FALLBACK_CATEGORY[cat] && !categoryRule(rubric, cat)) cat = FALLBACK_CATEGORY[cat];
+        const cat = rubricCategory(e.code, rubric);
         e.category = cat;
         (byCategory[cat] = byCategory[cat] || []).push(e);
     });
