@@ -23,7 +23,8 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "0.7.0";
+/* 0.8.0 (2026-10-30): "=" binds tighter than ∨ ∧ and the comma (regroupJoiners); rules.statements.list */
+const VERSION = "0.8.0";
 
 /* ============================================================
    DEFAULTS
@@ -54,6 +55,7 @@ const DEFAULT_RULES = {
     statements: {
         scaleEquation: true,             // 2x = 4 is x = 2
         sameSolutions: true,             // xy = 8 is y = 8/x (the same solution set): true | "note" | false
+        list: "note",                    // x < 1, x = 3 for x < 1 ∨ x = 3 (the comma as the reference's ∨ / ∧): true | "note" | false
         domain: null,                    // { y: { min: "-pi/2", max: "pi/2" } }: equivalent only there -> partial (category domain)
         derivation: "lastOnly"           // lastOnly | allSteps
     },
@@ -115,8 +117,9 @@ const CATEGORY_OF = {
     "extra-solution": "elements",
     "missing-excluded": "elements",
     "extra-excluded": "elements",
-    "solution-list": "form",
-    "exclusion-list": "form",
+    "solution-list": "commaList",
+    "exclusion-list": "commaList",
+    "statement-list": "commaList",
     "solution-form-not-accepted": "form",
     "missing-plus-minus": "plusMinus",
     "pm-first-wrong": "plusMinus",
@@ -158,6 +161,11 @@ const CATEGORY_OF = {
 
 /* the diagnosis categories: graded through "value" until the rubric sets them (CHECKING-API-DESIGN 9.2) */
 const DIAGNOSIS_CATEGORIES = ["sign", "factor", "scale", "term"];
+/*
+ * a category graded as another one until the rubric sets it: commaList (x = 1, 5 · x ≠ 1, 5 · x < 1, x = 3 - a comma for
+ * ∨ / ∧ / a set) is a form error unless the teacher gives it its own penalty (2026-10-30)
+ */
+const FALLBACK_CATEGORY = { commaList: "form" };
 /* categories that cost points even when the teacher's rubric does not list them */
 const CATEGORY_DEFAULTS = { domain: { mode: "once", points: 30 }, units: { mode: "once", points: 30 }, plusMinus: { mode: "once", points: 50 } };
 
@@ -277,7 +285,56 @@ function answerOf(rootNode) {
     const els = (rootNode.elements || []).filter(function (e) { return e !== null && e !== undefined; });
     if (els.length === 0) return null;
     if (els.length === 1) return els[0];
-    return { type: "chain", elements: els };
+    return regroupJoiners(els) || { type: "chain", elements: els };
+}
+
+/*
+ * The keyboard's "=" splits the whole root into the sides of a chain, so x < 1 ∨ x = 3 came as (x < 1 ∨ x) = 3 and
+ * x = 1, 5 as x = (1, 5). "=" binds tighter than ∨, ∧ and the comma, as < and ≠ do (2026-10-30): the chain is cut at
+ * the top-level joiners of its sides and built again - x < 1 ∨ (x = 3), (x = 1), 5. null when no side has a joiner.
+ */
+const JOINER_RANK = { list: 0, or: 1, and: 2 };       // the comma the weakest, then ∨, then ∧
+function joinerOf(n) {
+    if (n && n.type === "list") return "list";
+    if (n && n.type === "operation" && (n.op === "or" || n.op === "and")) return n.op;
+    return null;
+}
+function regroupJoiners(els) {
+    if (!els.some(joinerOf)) return null;
+    /* every side as parts with the joiners between them, in order */
+    const flatten = function (n, parts, joins) {
+        const j = joinerOf(n);
+        if (!j) { parts.push(n); return; }
+        (j === "list" ? n.items : n.operands).forEach(function (c, i) {
+            if (i > 0) joins.push(j);
+            flatten(c, parts, joins);
+        });
+    };
+    /* segments: the equations between joiners - the last part of a side and the first of the next are one equation */
+    const segments = [], joins = [];
+    els.forEach(function (e, i) {
+        const parts = [], js = [];
+        flatten(e, parts, js);
+        if (i === 0) segments.push([parts[0]]);
+        else segments[segments.length - 1].push(parts[0]);
+        for (let k = 1; k < parts.length; k += 1) { joins.push(js[k - 1]); segments.push([parts[k]]); }
+    });
+    const nodes = segments.map(function (seg) { return seg.length === 1 ? seg[0] : { type: "chain", elements: seg }; });
+    /* built again by rank: split at the weakest joiner first */
+    const build = function (lo, hi, rank) {
+        if (lo === hi) return nodes[lo];
+        if (rank > 2) return nodes[lo];
+        const name = Object.keys(JOINER_RANK).filter(function (k) { return JOINER_RANK[k] === rank; })[0];
+        const items = [];
+        let start = lo;
+        for (let i = lo; i < hi; i += 1) {
+            if (joins[i] === name) { items.push(build(start, i, rank + 1)); start = i + 1; }
+        }
+        items.push(build(start, hi, rank + 1));
+        if (items.length === 1) return items[0];
+        return name === "list" ? { type: "list", items: items } : { type: "operation", op: name, operands: items };
+    };
+    return build(0, nodes.length - 1, 0);
 }
 
 const RELATION_OPS = {
@@ -1090,6 +1147,7 @@ const TEXT = {
         "extra-excluded": "\\({element}\\) should not be excluded.",
         "solution-list": "Writing the solutions with commas is not a proper form: write \\({joined}\\) or \\({set}\\).",
         "exclusion-list": "Writing the excluded values with commas is not a proper form: write \\({joined}\\) or \\({set}\\).",
+        "statement-list": "Joining the statements with commas is not a proper form: write \\({joined}\\).",
         "solution-form-not-accepted": "The values are right, but write the answer in the form \\({form}\\).",
         "missing-plus-minus": "Only one of the two values: the answer should have \\(\\pm\\) (both values).",
         "pm-first-wrong": "The part before \\(\\pm\\) is not correct.",
@@ -1168,7 +1226,7 @@ const TEXT = {
         "kind-list": "a list", "kind-derivation": "a chain of steps", "kind-empty": "empty",
         "kind-membership": "a membership (x ∈ A)",
         "cat-value": "Value", "cat-sign": "Sign", "cat-factor": "Factor", "cat-scale": "Scale", "cat-term": "Terms",
-        "cat-form": "Form", "cat-relation": "Relation", "cat-elements": "Elements", "cat-order": "Order",
+        "cat-form": "Form", "cat-commaList": "Commas", "cat-relation": "Relation", "cat-elements": "Elements", "cat-order": "Order",
         "cat-precision": "Precision", "cat-derivation": "Derivation", "cat-mistake": "Common mistake", "cat-domain": "Domain",
         "cat-incomplete": "Incomplete", "cat-answerType": "Type of answer",
         "detail-like-terms": "combine the like terms", "detail-numbers": "calculate the numbers",
@@ -1188,6 +1246,7 @@ const TEXT = {
         "extra-excluded": "אין להוציא את \\({element}\\).",
         "solution-list": "כתיבת הפתרונות עם פסיקים אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
         "exclusion-list": "כתיבת הערכים המוצאים עם פסיקים אינה צורה תקינה: יש לכתוב \\({joined}\\) או \\({set}\\).",
+        "statement-list": "חיבור הטענות בפסיקים אינו צורה תקינה: יש לכתוב \\({joined}\\).",
         "solution-form-not-accepted": "הערכים נכונים, אבל יש לכתוב את התשובה בצורה \\({form}\\).",
         "missing-plus-minus": "רק אחד משני הערכים: בתשובה צריך \\(\\pm\\) (שני הערכים).",
         "pm-first-wrong": "החלק שלפני \\(\\pm\\) אינו נכון.",
@@ -1266,7 +1325,7 @@ const TEXT = {
         "kind-list": "רשימה", "kind-derivation": "שרשרת שלבים", "kind-empty": "ריקה",
         "kind-membership": "שייכות לקבוצה (x ∈ A)",
         "cat-value": "ערך", "cat-sign": "סימן", "cat-factor": "גורם", "cat-scale": "קנה מידה", "cat-term": "איברים",
-        "cat-form": "צורה", "cat-relation": "יחס", "cat-elements": "איברים", "cat-order": "סדר",
+        "cat-form": "צורה", "cat-commaList": "פסיקים", "cat-relation": "יחס", "cat-elements": "איברים", "cat-order": "סדר",
         "cat-precision": "דיוק", "cat-derivation": "פיתוח", "cat-mistake": "טעות נפוצה", "cat-domain": "תחום",
         "cat-incomplete": "תשובה חלקית", "cat-answerType": "סוג התשובה",
         "detail-like-terms": "יש לכנס איברים דומים", "detail-numbers": "יש לחשב את המספרים",
@@ -1286,6 +1345,7 @@ const TEXT = {
         "extra-excluded": "يجب ألا يُستثنى \\({element}\\).",
         "solution-list": "كتابة الحلول بالفواصل ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
         "exclusion-list": "كتابة القيم المستثناة بالفواصل ليست صيغة سليمة: اكتب \\({joined}\\) أو \\({set}\\).",
+        "statement-list": "ربط العبارات بالفواصل ليس صيغة سليمة: اكتب \\({joined}\\).",
         "solution-form-not-accepted": "القيم صحيحة، لكن اكتب الإجابة بالصيغة \\({form}\\).",
         "missing-plus-minus": "قيمة واحدة فقط من القيمتين: يجب أن تحتوي الإجابة على \\(\\pm\\) (القيمتين).",
         "pm-first-wrong": "الجزء قبل \\(\\pm\\) غير صحيح.",
@@ -1364,7 +1424,7 @@ const TEXT = {
         "kind-list": "قائمة", "kind-derivation": "سلسلة خطوات", "kind-empty": "فارغة",
         "kind-membership": "انتماء لمجموعة (x ∈ A)",
         "cat-value": "القيمة", "cat-sign": "الإشارة", "cat-factor": "العامل", "cat-scale": "المقياس", "cat-term": "الحدود",
-        "cat-form": "الشكل", "cat-relation": "العلاقة", "cat-elements": "العناصر", "cat-order": "الترتيب",
+        "cat-form": "الشكل", "cat-commaList": "الفواصل", "cat-relation": "العلاقة", "cat-elements": "العناصر", "cat-order": "الترتيب",
         "cat-precision": "الدقة", "cat-derivation": "الاشتقاق", "cat-mistake": "خطأ شائع", "cat-domain": "المجال",
         "cat-incomplete": "إجابة ناقصة", "cat-answerType": "نوع الإجابة",
         "detail-like-terms": "اجمع الحدود المتشابهة", "detail-numbers": "احسب الأعداد",
@@ -1954,7 +2014,8 @@ function compareOne(student, reference, rules, options, debug) {
         items.push({ kind: kind, code: code, params: params || {}, nodes: (nodes || []).filter(Boolean) });
     };
     const ctx = makeContext(rules, options.seed !== undefined ? options.seed : hashString(JSON.stringify(stripSrc(reference))));
-    const s = answerOf(student), r = answerOf(reference);
+    let s = answerOf(student);
+    const r = answerOf(reference);
     const state = { valueRight: false, matchedMistake: null, equivalence: null };
     /* a missing element / statement named in the feedback (it shows part of the answer: feedback.nameMissing) */
     const missingParams = function (key, node) {
@@ -2010,6 +2071,18 @@ function compareOne(student, reference, rules, options, debug) {
         (rSet.values.length > 1 || sSet.values.length > 1 || rSet.form !== sSet.form)) {
         compareValueSets(sSet, rSet);
         return { items: items, state: state };
+    }
+
+    /*
+     * x < 1, x = 3 for x < 1 ∨ x = 3: a list of statements is read with the reference's ∨ / ∧, the comma form graded
+     * by rules.statements.list (true accepted, "note", false an error - category form) once the value is right.
+     */
+    const isStatement = function (n) { return ["equation", "inequality", "membership", "statement"].indexOf(kindOf(n)) >= 0; };
+    let statementList = false;
+    if (s && s.type === "list" && s.items.length > 1 && s.items.every(isStatement) &&
+        r && r.type === "operation" && (r.op === "or" || r.op === "and")) {
+        s = { type: "operation", op: r.op, operands: s.items };
+        statementList = true;
     }
 
     function compareValueSets(ss, rs) {
@@ -2157,6 +2230,10 @@ function compareOne(student, reference, rules, options, debug) {
 
     /* form, numbers - only when the value is right (decided 2026-10-21, CHECKING-API-DESIGN 9.3) */
     if (state.valueRight) {
+        const listLevel = (rules.statements || {}).list === undefined ? "note" : rules.statements.list;
+        if (statementList && listLevel !== true) {
+            add(listLevel === "note" ? "note" : "error", "statement-list", { joined: latex(s) }, [s]);
+        }
         runFormChecks(s, r, rules, function (lvl, code, params, nodes) {
             if (code === "not-simplified" && params.detailKey) params = { detail: params.detailKey };
             add(lvl === "note" ? "note" : "error", code, params, nodes);
@@ -2226,9 +2303,13 @@ function valueSetOf(a) {
     if (a.type === "relation" && (a.op === "memberOf" || a.op === "notMemberOf") && isVar(a.left) && a.right && a.right.type === "set") {
         return { variable: varKey(a.left), kind: a.op === "memberOf" ? "equal" : "notEqual", form: "set", values: a.right.elements };
     }
-    /* x ≠ 1, 5: the list starts with the relation, the other values follow */
-    if (a.type === "list" && a.items.length > 1 && a.items[0] && a.items[0].type === "relation" &&
-        (a.items[0].op === "notEqual" || a.items[0].op === "equal") && isVar(a.items[0].left)) {
+    /* x ≠ 1, 5 / x = 1, 5: the list starts with the relation (or the equation - a chain, see regroupJoiners), the
+       other values follow */
+    const first = a.type === "list" && a.items.length > 1 && a.items[0];
+    const head = !first ? null
+        : first.type === "relation" && (first.op === "notEqual" || first.op === "equal") ? first
+        : first.type === "chain" && first.elements.length === 2 ? { op: "equal", left: first.elements[0], right: first.elements[1] } : null;
+    if (head && isVar(head.left)) {
         const rest = a.items.slice(1);
         /* x ≠ 2, x ≠ 8 (or x = 1, x = 5): a list of statements, each a single value of the same variable - the comma
            joins ≠ by AND (excluded values) and = by OR (solutions) */
@@ -2238,8 +2319,8 @@ function valueSetOf(a) {
                 values: statements.map(function (p) { return p.values[0]; }) };
         }
         if (rest.some(function (n) { return !n || hasVariable(n); })) return null;
-        return { variable: varKey(a.items[0].left), kind: a.items[0].op === "equal" ? "equal" : "notEqual", form: "list",
-            values: [a.items[0].right].concat(rest) };
+        return { variable: varKey(head.left), kind: head.op === "equal" ? "equal" : "notEqual", form: "list",
+            values: [head.right].concat(rest) };
     }
     /* x = 1 ∨ x = 5, x ≠ 1 ∧ x ≠ 5 */
     if (a.type === "operation" && (a.op === "or" || a.op === "and")) {
@@ -2386,6 +2467,7 @@ function applyRubric(raw, rubric) {
         let cat = CATEGORY_OF[e.code] || "value";
         /* a diagnosis category the rubric does not set: graded as a wrong value (CHECKING-API-DESIGN 9.2) */
         if (DIAGNOSIS_CATEGORIES.indexOf(cat) >= 0 && !categoryRule(rubric, cat)) cat = "value";
+        if (FALLBACK_CATEGORY[cat] && !categoryRule(rubric, cat)) cat = FALLBACK_CATEGORY[cat];
         e.category = cat;
         (byCategory[cat] = byCategory[cat] || []).push(e);
     });

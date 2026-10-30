@@ -383,7 +383,8 @@ window.addEventListener("error", function (e) { $("errors").textContent = "Error
 const VALUE_SET_FORMS = [
     ["solutions", "plusMinus", "x = 3 ± 2"], ["solutions", "or", "x = 1 ∨ x = 5"], ["solutions", "set", "x ∈ {1, 5}"],
     ["solutions", "list", "x = 1, 5 (improper)"],
-    ["exclusions", "and", "x ≠ 1 ∧ x ≠ 5"], ["exclusions", "set", "x ∉ {1, 5}"], ["exclusions", "list", "x ≠ 1, 5 (improper)"]
+    ["exclusions", "and", "x ≠ 1 ∧ x ≠ 5"], ["exclusions", "set", "x ∉ {1, 5}"], ["exclusions", "list", "x ≠ 1, 5 (improper)"],
+    ["statements", "list", "x < 1, x = 3 for x < 1 ∨ x = 3 (improper)"]
 ];
 VALUE_SET_FORMS.forEach(function (f) {
     $("valueSetForms").insertAdjacentHTML("beforeend", "<label>" + f[2] + " <select data-vs='" + f[0] + "." + f[1] + "'>" +
@@ -405,6 +406,7 @@ FORMS.forEach(function (f) {
 const CATEGORIES = [
     ["value", "Wrong value"],
     ["form", "Form check failed (not reduced, not expanded...)"],
+    ["commaList", "A comma for ∨ / ∧ / a set, when not accepted: x = 1, 5 · x ≠ 1, 5 · x < 1, x = 3 (not set: as form)"],
     ["relation", "Wrong relation or direction (< for ≤)"],
     ["elements", "Missing / extra element of a set, list, statement"],
     ["order", "Elements in the wrong order (tuple)"],

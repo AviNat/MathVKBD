@@ -13,7 +13,13 @@ when the teacher's rubric leaves it out). A student's d/dx, ∫, lim, Σ, ∏ th
 data only, not part of the library: one entry per rule / rubric element (id = its path, text he/en/ar - English
 written so far, examples in the test notation with the expected result); `mathCheckHelp.html` is the document built
 from it (examples computed live), linked from the playground; every example is also a test (mathCheckTests.js).
-How to show one entry next to its control (instead of a "?" on every item) is still open. Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
+How to show one entry next to its control (instead of a "?" on every item) is still open. 0.8.0 (2026-10-30): the
+keyboard's "=" splits the whole root into the sides of a chain ((x < 1 ∨ x) = 3); `answerOf` regroups it so "=" binds
+tighter than ∨, ∧ and the comma, as < and ≠ do (x < 1 ∨ (x = 3); x = 1, 5 is (x = 1), 5). `statements.list`
+(true | "note" | false, default "note"): a comma list of statements for a reference joined by ∨ / ∧ (x < 1, x = 3 for
+x < 1 ∨ x = 3) is read with the reference's connective; the comma form gives `statement-list`. Rubric category
+`commaList` for `solution-list`, `exclusion-list` and `statement-list` (a comma for ∨ / ∧ / a set, when the rule does not
+accept it): its own penalty for a partial grade; when the rubric does not set it, graded as `form` (as before). Not yet: the builder page (section 6), units, highlighting, the server packaging. Builds on `ANSWER-CHECKING-DESIGN.md` (the math tree, the comparison
 strategies, the rejected options), which stays valid. This document adds what the user asked for on 2026-10-21:
 
 - one function that compares the student's semantic AST with the reference's, usable **in the browser and on a server**;

@@ -4664,6 +4664,11 @@ MoodleMathKeyboard.prototype.insertPhysicalSymbol = function(id) {
         }
     }
 };
+/* < and > typed: as the keys of the Relations group - only when the keyboard has that group */
+MoodleMathKeyboard.prototype.insertPhysicalRelation = function(op) {
+    if (!this.config.symbols || !this.config.symbols.relations) return;
+    this.insertOperator(op, true);
+};
 MoodleMathKeyboard.prototype.makeCommaButton = function(row, symbol) {
     let self = this;
 
@@ -6318,6 +6323,9 @@ let PHYSICAL_KEY_ACTIONS = {
     "!": ["insertPhysicalSymbol", "factorial"],
     "%": ["insertPhysicalSymbol", "percent"],
 
+    "<": ["insertPhysicalRelation", "less"],
+    ">": ["insertPhysicalRelation", "greater"],
+
     "Backspace": "deleteLeft",
 
     "ArrowLeft": ["moveCursor", -1],
@@ -6843,7 +6851,8 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * another panel opens. 4.2.5: a one-point vector with an index has the arrow over the letter only: \vec{u}_{n+1}.
  * 4.2.6: a variable with a LaTeX command (latex: "\\Psi") shows as the symbol, not as its name.
  * 4.2.7 (2026-10-29): config.displayChars - the answer box's width in characters (empty: the whole width).
+ * 4.2.8 (2026-10-30): < and > on the computer keyboard (when the Relations group is on).
  */
-MoodleMathKeyboard.version = "4.2.7";
+MoodleMathKeyboard.version = "4.2.8";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
