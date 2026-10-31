@@ -3,7 +3,7 @@
  * No part of this file may be copied, modified or distributed without the written permission of the copyright holder.
  */
 /*
- * MoodleMathKeyboard V4 (version 4.2.1 - MoodleMathKeyboard.version)
+ * MoodleMathKeyboard V4 (version 4.3.0 - MoodleMathKeyboard.version)
  * Reusable structured mathematical expression editor and keyboard.
  *
  * Host page requirements:
@@ -551,6 +551,7 @@ function MoodleMathKeyboard(options) {
     }
     window.MoodleMathKeyboardInstanceCounter += 1;
     this.cursorMarkerId = "mathKbdCursorMarker" + window.MoodleMathKeyboardInstanceCounter;
+    this.probes = null;   // the cursor places while drawing for a click (placeCursorAt)
     this.caret = null;
     this.displayContainer = null;
     this.init();
@@ -560,7 +561,101 @@ function MoodleMathKeyboard(options) {
     }
 }
 
-MoodleMathKeyboard.prototype.positionCaret = function () {   
+/*
+ * A click on the display puts the cursor at the place nearest the click (4.3.0). The places come from a hidden copy
+ * of the display drawn with a probe at each one (probeMarkerLatex). Nearest: the horizontal distance first; the
+ * height decides between places at the same x (x³|y: the end of the exponent, or the place before y) - the click
+ * at the exponent's height goes into the exponent. With the implicit · shown, its side decides (implicitDotBefore).
+ * Resolves true when the cursor moved; nothing changes when the answer changed meanwhile (a key pressed).
+ */
+MoodleMathKeyboard.prototype.placeCursorAt = function (clientX, clientY) {
+    let self = this;
+    if (!this.display || !window.MathJax || !window.MathJax.typesetPromise) return Promise.resolve(false);
+
+    let before = this.getEditingDisplayLatex();
+    let markerId = this.cursorMarkerId;
+    let probeId = markerId + "Probe";
+    let latex, places;
+
+    /* the copy's ids differ from the display's (the cursor marker, the placeholders' ids come from cursorMarkerId) */
+    this.probes = [];
+    this.cursorMarkerId = probeId;
+    try {
+        latex = this.getEditingDisplayLatex();
+    } finally {
+        places = this.probes;
+        this.probes = null;
+        this.cursorMarkerId = markerId;
+    }
+
+    let displayRect = this.display.getBoundingClientRect();
+    let x = clientX - displayRect.left;
+    let y = clientY - displayRect.top;
+    let copy = this.display.cloneNode(false);
+    copy.style.position = "absolute";
+    copy.style.left = this.display.offsetLeft + "px";
+    copy.style.top = this.display.offsetTop + "px";
+    copy.style.width = this.display.offsetWidth + "px";
+    copy.style.height = this.display.offsetHeight + "px";
+    copy.style.visibility = "hidden";
+    copy.style.pointerEvents = "none";
+    copy.setAttribute("aria-hidden", "true");
+
+    function removeCopy() {
+        if (window.MathJax.typesetClear) window.MathJax.typesetClear([copy]);
+        if (copy.parentNode) copy.parentNode.removeChild(copy);
+    }
+
+    return queueMathJax(function () {
+        self.displayContainer.appendChild(copy);
+        copy.textContent = "\\(" + latex + "\\)";
+        return window.MathJax.typesetPromise([copy]);
+    }).then(function () {
+        copy.scrollLeft = self.display.scrollLeft;
+        let place = self.nearestProbe(copy, probeId, places, x, y);
+        removeCopy();
+        if (!place || self.getEditingDisplayLatex() !== before) return false;
+        self.cursor = place;
+        self.render();
+        return true;
+    }, function () {
+        removeCopy();
+        return false;
+    });
+};
+/* the place of the probe nearest (x, y) - relative to the copy's box; only places the arrows can reach */
+MoodleMathKeyboard.prototype.nearestProbe = function (copy, probeId, places, x, y) {
+    let self = this;
+    let map = this.buildCursorMap();
+    let box = copy.getBoundingClientRect();
+    let best = null;
+    let bestScore = Infinity;
+    let i;
+
+    for (i = 0; i < places.length; i += 1) {
+        let marker = document.getElementById(probeId + "P" + i);
+        if (!marker) continue;
+        if (!map.some(function (p) { return self.cursorEquals(p, places[i]); })) continue;
+
+        let r = marker.getBoundingClientRect();
+        let left = r.left - box.left;
+        let top = r.top - box.top;
+        let bottom = r.bottom - box.top;
+        let dx = Math.abs(x - left);
+        let dy = Math.max(0, top - y, y - bottom);
+        /* outside the probe's height counts twice; the distance from its middle decides between places at one x */
+        let score = dx + 2 * dy + 0.5 * Math.abs(y - (top + bottom) / 2);
+
+        if (score < bestScore) {
+            bestScore = score;
+            best = places[i];
+        }
+    }
+
+    return best;
+};
+
+MoodleMathKeyboard.prototype.positionCaret = function () {
     if (!this.caret) return;
 
     let marker = document.getElementById(this.cursorMarkerId);
@@ -2953,16 +3048,49 @@ MoodleMathKeyboard.prototype.renderWhenMathJaxReady = function () {
     }, 20);
 };
 
-MoodleMathKeyboard.prototype.cursorLatexForSequence = function (seq, offset) {
+/* noProbe: the probe of this place is drawn elsewhere (right of an implicit · - see renderSequence) */
+MoodleMathKeyboard.prototype.cursorLatexForSequence = function (seq, offset, noProbe) {
+    let out = "";
     if (this.cursor.textNodeId === null && this.cursor.seqId === seq.id && this.cursor.offset === offset) {
-        return this.cursorMarkerLatex();
+        out = this.cursorMarkerLatex();
     }
-    return "";
+    if (this.probes && !noProbe) {
+        out += this.probeMarkerLatex({ seqId: seq.id, offset: offset, textNodeId: null, charOffset: null });
+    }
+    return out;
+};
+/*
+ * CLICK TO PLACE THE CURSOR (4.3.0). While this.probes is a list, the renderer marks every cursor place with a probe:
+ * a thin bar of the cursor's height, of no width (\rlap - the layout stays as drawn), whose id is its index in
+ * this.probes. placeCursorAt draws that LaTeX in a hidden copy of the display and takes the probe nearest the click.
+ * A \rule, not a "|": the ink of "|" is 2-3px right of the place.
+ */
+MoodleMathKeyboard.prototype.probeMarkerLatex = function (place) {
+    this.probes.push(place);
+    return "\\rlap{\\cssId{" + this.cursorMarkerId + "P" + (this.probes.length - 1) + "}{\\rule[-0.25em]{0.02em}{1em}}}";
+};
+/* a number in the editing view: the cursor and the probes between its digits */
+MoodleMathKeyboard.prototype.numberEditingLatex = function (item) {
+    let out = "";
+    let k;
+    for (k = 0; k <= item.text.length; k += 1) {
+        if (this.cursor.textNodeId === item.id && this.cursor.charOffset === k) out += this.cursorMarkerLatex();
+        if (this.probes && k > 0 && k < item.text.length) {
+            out += this.probeMarkerLatex({ seqId: null, offset: null, textNodeId: item.id, charOffset: k });
+        }
+        out += item.text.charAt(k);
+    }
+    return out;
+};
+/* is an implicit · drawn between items i - 1 and i of seq */
+MoodleMathKeyboard.prototype.implicitDotBefore = function (seq, i) {
+    let rule = SYNTAX_RULES[seq.syntax];
+    return i > 0 && i < seq.items.length && !!this.config.showImplicitMultiply && !!rule && !!rule.implicitMultiply &&
+        this.editorNodesImplicitlyMultiply(seq.items[i - 1], seq.items[i]);
 };
 
 MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCursor = false) {
     let out = "";
-    let rule = SYNTAX_RULES[seq.syntax];
     let i;
 
     if (seq.items.length === 0) {
@@ -2971,6 +3099,8 @@ MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCur
 
             if (!this.isRootSequence(seq)) {
                 out += this.placeholderLatex(seq);
+                /* a click anywhere on the □ goes into it: a probe on both sides */
+                if (this.probes) out += this.probeMarkerLatex({ seqId: seq.id, offset: 0, textNodeId: null, charOffset: null });
             }
         }
 
@@ -2983,32 +3113,27 @@ MoodleMathKeyboard.prototype.renderSequence = function(seq, editing, suppressCur
     }
 
     for (i = 0; i < seq.items.length; i += 1) {
-        if (i > 0 &&
-            this.config.showImplicitMultiply &&
-            rule &&
-            rule.implicitMultiply &&
-            this.editorNodesImplicitlyMultiply(
-                seq.items[i - 1],
-                seq.items[i]
-            )) {
+        let probing = !!this.probes && !suppressCursor && editing;
 
+        if (this.implicitDotBefore(seq, i)) {
             out += "\\cdot ";
+            /*
+             * x³·y: the place between the factors is probed right of the ·, not left of it - a click left of the ·
+             * finds the end of x³ (in the exponent), a click right of it finds the place before y.
+             */
+            if (probing) out += this.probeMarkerLatex({ seqId: seq.id, offset: i, textNodeId: null, charOffset: null });
         }
 
         let item = seq.items[i];
 
-        if (!suppressCursor && editing && item.type === "number" && this.cursor.textNodeId === item.id) {
-
-            out += item.text.substring(0, this.cursor.charOffset);
-            out += this.cursorMarkerLatex();
-            out += item.text.substring(this.cursor.charOffset);
-
+        if (!suppressCursor && editing && item.type === "number" && (this.probes || this.cursor.textNodeId === item.id)) {
+            out += this.numberEditingLatex(item);
         } else {
             out += this.renderNode(item, editing);
         }
 
         if (!suppressCursor && editing) {
-            out += this.cursorLatexForSequence(seq, i + 1);
+            out += this.cursorLatexForSequence(seq, i + 1, this.implicitDotBefore(seq, i + 1));
         }
     }
 
@@ -3849,7 +3974,9 @@ MoodleMathKeyboard.prototype.init = function () {
     this.displayContainer.appendChild(this.display);
     this.display.onclick = function(event) {
         event.stopPropagation();
-        if (!self.config.readOnly) self.showKeyboard();
+        if (self.config.readOnly) return;
+        self.showKeyboard();
+        self.placeCursorAt(event.clientX, event.clientY);
     };
 
     this.caret = document.createElement("div");
@@ -6852,7 +6979,8 @@ MoodleMathKeyboard.prototype.destroy = function () {
  * 4.2.6: a variable with a LaTeX command (latex: "\\Psi") shows as the symbol, not as its name.
  * 4.2.7 (2026-10-29): config.displayChars - the answer box's width in characters (empty: the whole width).
  * 4.2.8 (2026-10-30): < and > on the computer keyboard (when the Relations group is on).
+ * 4.3.0 (2026-10-31): a click on the display puts the cursor at the place nearest the click (placeCursorAt).
  */
-MoodleMathKeyboard.version = "4.2.8";
+MoodleMathKeyboard.version = "4.3.0";
 window.MoodleMathKeyboard = MoodleMathKeyboard;
 })();
