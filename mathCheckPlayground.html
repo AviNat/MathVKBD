@@ -97,13 +97,26 @@ main[hidden] { display: none; }
 .grid label.check { justify-content: flex-start; gap: 6px; }
 .grid label.check input { margin: 0; flex: none; }
 .file-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
-.file-bar button { font: inherit; padding: 5px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
-.file-bar button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.file-bar button, .mis-row button { font: inherit; padding: 5px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+.file-bar button.primary, .mis-row button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mis-row button[hidden] { display: none; }
 #fileName { font-weight: 600; }
 .dirty { color: #b54708; font-weight: 600; font-size: 12px; }
 #fileSummary td:first-child { font-weight: 600; white-space: nowrap; width: 150px; }
 #packageJson { height: 260px; }
-/* tab 4: a whole line of the settings grid, its controls side by side */
+/* tab 3: the correct answer (read-only), the mistakes list */
+.did-ref { font-size: 20px; direction: ltr; text-align: left; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--line);
+           border-radius: 6px; min-height: 40px; }
+.warn { color: #b54708; font-size: 12px; } .warn:empty { display: none; }
+.info { color: var(--accent); font-size: 12px; } .info:empty { display: none; }
+#misTable td.math { direction: ltr; text-align: left; font-size: 16px; white-space: nowrap; }
+#misTable td.acts { white-space: nowrap; }
+#misTable td.acts button { font: inherit; font-size: 12px; padding: 1px 6px; }
+#misTable tr.editing td { background: #fff8e6; }
+.mis-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; }
+.mis-row input[type=text] { flex: 1 1 320px; }
+details > summary h2 { display: inline; }
+/* tab 5: a whole line of the settings grid, its controls side by side */
 .q-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
 .q-row[hidden] { display: none; }
 .q-row label.check { justify-content: flex-start; gap: 6px; }
@@ -136,17 +149,65 @@ main[hidden] { display: none; }
 <nav class="tabs" role="tablist">
   <button type="button" role="tab" id="tabBtnKeyboard" aria-selected="false" aria-controls="tabKeyboard">1. Keyboard</button>
   <button type="button" role="tab" id="tabBtnChecker" aria-selected="true" aria-controls="tabChecker">2. Checker</button>
-  <button type="button" role="tab" id="tabBtnFile" aria-selected="false" aria-controls="tabFile">3. Exercise file</button>
-  <button type="button" role="tab" id="tabBtnQuestion" aria-selected="false" aria-controls="tabQuestion">4. Question code</button>
+  <button type="button" role="tab" id="tabBtnDidactics" aria-selected="false" aria-controls="tabDidactics">3. Didactics</button>
+  <button type="button" role="tab" id="tabBtnFile" aria-selected="false" aria-controls="tabFile">4. Exercise file</button>
+  <button type="button" role="tab" id="tabBtnQuestion" aria-selected="false" aria-controls="tabQuestion">5. Question code</button>
   <span class="tab-note"><span id="dirtyMark" class="dirty"></span> <span id="kbSummary"></span></span>
 </nav>
 
-<!-- 3. the exercise file: keyboard + reference answer + rules + rubric, saved and opened together -->
+<!-- 3. didactics: the answer the student starts from, the teacher's common mistakes -->
+<main id="tabDidactics" role="tabpanel" hidden>
+  <section class="wide">
+    <h2>Correct answer <button type="button" id="didEditRef" style="margin-inline-start:10px">Edit in the Checker tab</button></h2>
+    <div class="hint">Read-only here - the reference answer of tab 2. The rules and the rubric there grade the mistakes too
+      (one rubric: a mistake takes the penalty of its category, or its own fixed grade).</div>
+    <div id="didRef" class="did-ref"></div>
+  </section>
+
+  <section class="wide">
+    <h2>Initial answer</h2>
+    <div class="hint">Optional. The student starts from this answer: part of it to complete (leave empty places), or a
+      wrong one to correct. Left as it is, it counts as no answer - nothing is graded. Empty: the student starts from an empty box.</div>
+    <div class="file-bar">
+      <button type="button" id="initFromRef">Copy from the correct answer</button>
+      <button type="button" id="initFromMistake" title="The selected mistake (Edit in the list below) - for a 'find the error' exercise">Copy from the mistake being edited</button>
+      <button type="button" id="initClear">Clear</button>
+    </div>
+    <div id="initHost" class="kbd"></div>
+    <div id="initInfo" class="info"></div>
+    <div id="initWarn" class="warn"></div>
+  </section>
+
+  <section class="wide">
+    <h2>Common mistakes</h2>
+    <div class="hint">Typical wrong answers, each with its message to the student. They are checked when the answer is not
+      right: the first mistake the answer equals - by value and the equivalence laws of tab 2, in any form - gives its message
+      and its grading instead of the automatic feedback. Order matters: the first match counts (↑ ↓).</div>
+    <h3 id="misEditTitle">New mistake</h3>
+    <div id="mistakeHost" class="kbd"></div>
+    <div class="mis-row">
+      <label style="display:flex;gap:6px;align-items:center;flex:1 1 420px">Message (English)
+        <input type="text" id="misMessage" placeholder="e.g. The derivative of x² is 2x, not x²." spellcheck="true"></label>
+      <label>Grading <select id="misGrading"></select></label>
+      <label id="misPointsLabel" hidden>Grade <input type="number" id="misPoints" min="0" max="100" value="50" style="width:64px"></label>
+    </div>
+    <div class="mis-row">
+      <button type="button" id="misAdd" class="primary">Add as a new mistake</button>
+      <button type="button" id="misSave" hidden>Save changes</button>
+      <button type="button" id="misCancel" hidden>Cancel</button>
+      <span id="misTry" class="hint"></span>
+    </div>
+    <div id="misWarn" class="warn"></div>
+    <table id="misTable"></table>
+  </section>
+</main>
+
+<!-- 4. the exercise file: keyboard + reference answer + rules + rubric + didactics, saved and opened together -->
 <main id="tabFile" role="tabpanel" hidden>
   <section class="wide">
     <h2>Exercise file</h2>
     <div class="hint">One file holds everything an exercise needs - the student's keyboard (tab 1), the reference answer,
-      the rules and the rubric (tab 2) - so the parts always belong together. Open it again to change the exercise.
+      the rules and the rubric (tab 2), the initial answer and the common mistakes (tab 3) - so the parts always belong together. Open it again to change the exercise.
       The file has its own extension, <code>.mchk</code> (a mathCheck exercise; JSON inside). Older <code>.json</code>
       files still open - Save then makes a new <code>.mchk</code> file.</div>
     <div class="file-bar">
@@ -175,8 +236,8 @@ main[hidden] { display: none; }
 <main id="tabQuestion" role="tabpanel" hidden>
   <section>
     <h2>Question settings</h2>
-    <div class="hint">The code of a question made from this exercise (tabs 1-2). All the student-side code is in the
-      library <code>mathQuestion.js</code>; the code holds only the configuration. Save the exercise file too (tab 3) -
+    <div class="hint">The code of a question made from this exercise (tabs 1-3). All the student-side code is in the
+      library <code>mathQuestion.js</code>; the code holds only the configuration. Save the exercise file too (tab 4) -
       or open this code again with <i>Open…</i>: it contains the whole exercise.</div>
     <div class="grid" style="margin-top:8px">
       <label class="check" style="grid-column:1/-1"><input type="radio" name="qTarget" value="stack" checked> Moodle STACK question (STACK-JS)</label>
@@ -261,7 +322,8 @@ main[hidden] { display: none; }
     <div id="refHost" class="kbd"></div>
   </section>
   <section>
-    <h2>Student answer</h2>
+    <h2>Student answer
+      <button type="button" id="stuToMistake" style="margin-inline-start:10px" title="Opens it in tab 3 as a new common mistake, to add its message">Save as a common mistake</button></h2>
     <div id="stuHost" class="kbd"></div>
   </section>
 
@@ -283,7 +345,7 @@ main[hidden] { display: none; }
   </section>
 
   <section class="wide">
-    <h2>How the equivalence is computed</h2>
+    <details id="analysis"><summary><h2>How the equivalence is computed</h2> <span class="hint">(the ladder and the sample points)</span></summary>
     <div class="hint">Each step of the ladder adds laws; both answers are written in a canonical form with the laws so far.
       The first step where the two forms are identical is the equivalence found. Laws set to "not accepted" are left out.
       The last step, equationForms, writes an equation or relation as (left − right) = 0 divided by its leading coefficient,
@@ -292,6 +354,7 @@ main[hidden] { display: none; }
     <table id="ladder"></table>
     <h3>Sample points (numeric mode)</h3>
     <table id="points"></table>
+    </details>
   </section>
 
   <section>
@@ -552,6 +615,11 @@ function copyFrom(areaId, msgId) {
 }
 $("copyCode").addEventListener("click", function () { copyFrom("code", "copyMsg"); });
 $("copyRef").addEventListener("click", function () { copyFrom("refJson", "copyRefMsg"); });
+/* the analysis (ladder, sample points) folded unless opened - remembered */
+try { $("analysis").open = localStorage.getItem("mathCheckPlayground.analysis") === "open"; } catch (e) { /* storage blocked */ }
+$("analysis").addEventListener("toggle", function () {
+    try { localStorage.setItem("mathCheckPlayground.analysis", $("analysis").open ? "open" : ""); } catch (e) { /* storage blocked */ }
+});
 
 function readRules() {
     const tol = $("tolerance").value;
@@ -603,6 +671,7 @@ function readRules() {
         if (m[3]) domain[m[1]].max = m[3];
     });
     if (Object.keys(domain).length) rules.statements.domain = domain;
+    rules.mistakes = mistakesForRules();         // tab 3
     return rules;
 }
 
@@ -840,7 +909,12 @@ const keyboards = {};                  // host id -> keyboard
 function makeKeyboard(hostId) {
     return new MoodleMathKeyboard(Object.assign(keyboardConfig(KB), {
         divId: hostId, physicalKeyboard: false,
-        onChange: function () { if (hostId !== "kbPreviewHost") { schedule(); changedByUser(); } }
+        /* (the mistake keyboard is a draft: the exercise changes when the mistake is added or saved) */
+        onChange: function () {
+            if (hostId === "kbPreviewHost") return;
+            schedule();
+            if (hostId !== "mistakeHost") changedByUser();
+        }
     }));
 }
 /* a new keyboard in its host with the current settings - what was typed in it stays */
@@ -863,7 +937,7 @@ function rebuild(hostId) {
     return k;
 }
 let checkerStale = true;
-["kbPreviewHost", "refHost", "stuHost"].forEach(function (hostId) {
+["kbPreviewHost", "refHost", "stuHost", "initHost", "mistakeHost"].forEach(function (hostId) {
     $(hostId).addEventListener("mousedown", function () { setActive(hostId); });
 });
 function setActive(hostId) {
@@ -894,6 +968,8 @@ function refreshChecker() {
     if (!checkerStale) return;
     rebuild("refHost");
     rebuild("stuHost");
+    rebuild("initHost");
+    rebuild("mistakeHost");
     checkerStale = false;
     schedule();
 }
@@ -909,30 +985,245 @@ $("copyKb").addEventListener("click", function () { copyFrom("kbCode", "copyKbMs
 
 /* the tabs (the one shown is remembered) */
 function showTab(name) {
-    if (["keyboard", "checker", "file", "question"].indexOf(name) < 0) name = "checker";
+    if (["keyboard", "checker", "didactics", "file", "question"].indexOf(name) < 0) name = "checker";
     $("tabKeyboard").hidden = name !== "keyboard";
     $("tabChecker").hidden = name !== "checker";
+    $("tabDidactics").hidden = name !== "didactics";
     $("tabFile").hidden = name !== "file";
     $("tabQuestion").hidden = name !== "question";
     $("tabBtnKeyboard").setAttribute("aria-selected", String(name === "keyboard"));
     $("tabBtnChecker").setAttribute("aria-selected", String(name === "checker"));
+    $("tabBtnDidactics").setAttribute("aria-selected", String(name === "didactics"));
     $("tabBtnFile").setAttribute("aria-selected", String(name === "file"));
     $("tabBtnQuestion").setAttribute("aria-selected", String(name === "question"));
     /* the try keyboard takes the computer keyboard of the whole page: only while its tab is shown */
     if (name !== "question") stopTry();
     if (name === "keyboard") { if (!keyboards.kbPreviewHost) rebuild("kbPreviewHost"); setActive("kbPreviewHost"); }
     else if (name === "checker") { refreshChecker(); setActive("stuHost"); }
+    else if (name === "didactics") { refreshChecker(); setActive("mistakeHost"); renderDidactics(); }
     else if (name === "question") { refreshChecker(); active = null; showQuestionTab(); }
     else { refreshChecker(); active = null; showFileTab(); }
     try { localStorage.setItem("mathCheckPlayground.tab", name); } catch (e) { /* storage blocked */ }
 }
 $("tabBtnKeyboard").addEventListener("click", function () { showTab("keyboard"); });
 $("tabBtnChecker").addEventListener("click", function () { showTab("checker"); });
+$("tabBtnDidactics").addEventListener("click", function () { showTab("didactics"); });
 $("tabBtnFile").addEventListener("click", function () { showTab("file"); });
 $("tabBtnQuestion").addEventListener("click", function () { showTab("question"); });
 
 /* ============================================================
-   3. THE EXERCISE FILE - keyboard + reference answer + rules + rubric in one JSON file (open / save as in the
+   3. DIDACTICS - the answer the student starts from (exercise.initial, mathQuestion.js) and the teacher's common
+   mistakes (rules.mistakes, CHECKING-API-DESIGN 3.10). One rubric: a mistake takes the penalty of its category in
+   tab 2's rubric ("mistake" by default), or its own fixed grade.
+   ============================================================ */
+/* each: { editor, answer (semantic AST), latex, message (English), messages (all languages, from a file), grading:
+   "cat:<category>" | "points", points } */
+let MISTAKES = [];
+let editingMistake = -1;                 // the mistake in the mistake keyboard, -1: a new one
+
+function kbEmpty(k) {
+    if (!k) return true;
+    const e = k.getEditorAST();
+    return !(e && e.elements && e.elements.some(function (el) { return (el.items || []).length > 0; })) && !k.getUnit();
+}
+
+/* the grading: a category of the rubric ("mistake" first) or a fixed grade */
+$("misGrading").innerHTML = ["mistake"].concat(CATEGORIES.map(function (c) { return c[0]; }).filter(function (c) { return c !== "mistake"; }))
+    .map(function (c) { return "<option value='cat:" + c + "'>rubric: " + c + (c === "mistake" ? " (default)" : "") + "</option>"; }).join("") +
+    "<option value='points'>a fixed grade</option>";
+$("misGrading").addEventListener("change", function () { $("misPointsLabel").hidden = $("misGrading").value !== "points"; });
+function gradingText(m) { return m.grading === "points" ? "grade " + m.points + "%" : "rubric: " + m.grading.slice(4); }
+
+/* the mistakes as the library reads them (only what differs from the defaults) */
+function mistakesForRules() {
+    return MISTAKES.map(function (m) {
+        const out = { answer: m.answer };
+        const messages = Object.assign({}, m.messages, { en: m.message.trim() });
+        Object.keys(messages).forEach(function (l) { if (!messages[l]) delete messages[l]; });
+        if (Object.keys(messages).length) out.message = messages;
+        if (m.grading === "points") out.points = m.points;
+        else if (m.grading !== "cat:mistake") out.category = m.grading.slice(4);
+        return out;
+    });
+}
+/* from a file: rules.mistakes, and the editor ASTs the playground keeps to edit them again (playground.mistakeEditors) */
+function loadMistakes(list, editors) {
+    MISTAKES = (list || []).map(function (m, i) {
+        const messages = typeof m.message === "string" ? { en: m.message } : Object.assign({}, m.message || {});
+        return {
+            editor: (editors || [])[i] || null, answer: m.answer, latex: MathCheck.latex(m.answer),
+            message: messages.en || "", messages: messages,
+            grading: typeof m.points === "number" ? "points" : "cat:" + (m.category || "mistake"),
+            points: typeof m.points === "number" ? m.points : 50
+        };
+    });
+    cancelMistakeEdit();
+}
+
+/* the mistake keyboard and its fields -> a mistake; null when nothing is typed */
+function readMistakeEditor() {
+    const k = keyboards.mistakeHost;
+    if (kbEmpty(k)) return null;
+    return {
+        editor: k.getEditorAST(), answer: stripSrc(k.getAST()), latex: k.getLatex(),
+        message: $("misMessage").value, messages: editingMistake >= 0 ? MISTAKES[editingMistake].messages : {},
+        grading: $("misGrading").value, points: Math.max(0, Math.min(100, Math.round(Number($("misPoints").value) || 0)))
+    };
+}
+function editMistake(i) {
+    const m = MISTAKES[i];
+    editingMistake = i;
+    loadEditor("mistakeHost", m.editor);         // (a file without the editor AST: typed again)
+    $("misMessage").value = m.message;
+    $("misGrading").value = m.grading;
+    $("misPoints").value = m.points;
+    $("misPointsLabel").hidden = m.grading !== "points";
+    showMistakeButtons();
+    setActive("mistakeHost");
+    renderDidactics();
+}
+function cancelMistakeEdit() {
+    editingMistake = -1;
+    if (keyboards.mistakeHost) keyboards.mistakeHost.clearAll();
+    $("misMessage").value = "";
+    $("misGrading").value = "cat:mistake";
+    $("misPoints").value = 50;
+    $("misPointsLabel").hidden = true;
+    showMistakeButtons();
+}
+function showMistakeButtons() {
+    const editing = editingMistake >= 0;
+    $("misEditTitle").textContent = editing ? "Mistake " + (editingMistake + 1) + " - editing" : "New mistake";
+    $("misSave").hidden = !editing;
+    $("misCancel").hidden = !editing;
+    $("misAdd").classList.toggle("primary", !editing);
+    $("misSave").classList.toggle("primary", editing);
+}
+function mistakesChanged() { changedByUser(); check(); }
+$("misAdd").addEventListener("click", function () {
+    const m = readMistakeEditor();
+    if (!m) { $("misWarn").textContent = "Type the wrong answer in the keyboard first."; return; }
+    m.messages = {};                              // a new mistake: not the edited one's other languages
+    MISTAKES.push(m);
+    cancelMistakeEdit();
+    mistakesChanged();
+});
+$("misSave").addEventListener("click", function () {
+    const m = readMistakeEditor();
+    if (!m) { $("misWarn").textContent = "Type the wrong answer in the keyboard first."; return; }
+    MISTAKES[editingMistake] = m;
+    cancelMistakeEdit();
+    mistakesChanged();
+});
+$("misCancel").addEventListener("click", function () { cancelMistakeEdit(); renderDidactics(); });
+$("misTable").addEventListener("click", function (e) {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    const i = Number(b.dataset.i), act = b.dataset.act;
+    if (act === "edit") { editMistake(i); return; }
+    if (act === "del" && !window.confirm("Delete mistake " + (i + 1) + "?")) return;
+    if (act === "del") MISTAKES.splice(i, 1);
+    if (act === "up" && i > 0) MISTAKES.splice(i - 1, 0, MISTAKES.splice(i, 1)[0]);
+    if (act === "down" && i < MISTAKES.length - 1) MISTAKES.splice(i + 1, 0, MISTAKES.splice(i, 1)[0]);
+    cancelMistakeEdit();                          // (the numbers changed)
+    mistakesChanged();
+});
+/* the checker's student answer as a new mistake: here, to add its message */
+$("stuToMistake").addEventListener("click", function () {
+    const k = keyboards.stuHost;
+    if (kbEmpty(k)) return;
+    const editor = k.getEditorAST();
+    showTab("didactics");
+    cancelMistakeEdit();
+    loadEditor("mistakeHost", editor);
+    setActive("mistakeHost");
+    $("misMessage").focus();
+});
+$("didEditRef").addEventListener("click", function () { showTab("checker"); setActive("refHost"); });
+
+/* the initial answer */
+function initialOf() {
+    const k = keyboards.initHost;
+    return kbEmpty(k) ? null : { editor: k.getEditorAST(), latex: k.getLatex() };
+}
+function initialChanged() { changedByUser(); schedule(); }
+$("initFromRef").addEventListener("click", function () { loadEditor("initHost", keyboards.refHost.getEditorAST()); initialChanged(); });
+$("initFromMistake").addEventListener("click", function () {
+    if (kbEmpty(keyboards.mistakeHost)) { $("initWarn").textContent = "The mistake keyboard is empty: click Edit on a mistake first."; return; }
+    loadEditor("initHost", keyboards.mistakeHost.getEditorAST());
+    initialChanged();
+});
+$("initClear").addEventListener("click", function () { keyboards.initHost.clearAll(); initialChanged(); });
+
+/* the tab's checks, with the rules and rubric of tab 2 (from check(), and when the tab is shown) */
+function renderDidactics(rules, rubric) {
+    if ($("tabDidactics").hidden || !keyboards.refHost || !keyboards.initHost) return;
+    if (!rules) rules = readRules();
+    if (!rubric) { try { rubric = JSON.parse($("rubric").value); } catch (e) { return; } }
+    const refK = keyboards.refHost, refUnit = refK.getUnit(), ref = refK.getAST();
+    $("didRef").textContent = refK.getLatex()
+        ? "\\(" + refK.getLatex() + (refUnit ? "\\;\\text{" + refUnit + "}" : "") + "\\)" : "(empty - type it in the Checker tab)";
+    typeset($("didRef"));
+    const options = { language: $("language").value, logicNotation: KB.logicNotation || "symbols" };
+    /* an answer graded against the reference - with the reference's unit, so only the answer itself counts */
+    const grade = function (ast, r) {
+        return refUnit ? MathCheck.compare({ answer: ast, unit: refUnit }, { answer: ref, unit: refUnit }, r, rubric, options)
+            : MathCheck.compare(ast, ref, r, rubric, options);
+    };
+    const matchedOf = function (res) { return res.matched.mistake === null || res.matched.mistake === undefined ? -1 : res.matched.mistake; };
+    const errorMessages = function (res) {
+        return res.items.filter(function (it) { return it.kind === "error"; }).map(function (it) { return it.message; }).join(" ");
+    };
+
+    /* the initial answer */
+    let info = "", warn = "";
+    if (!kbEmpty(keyboards.initHost)) {
+        const res = grade(keyboards.initHost.getAST(), rules);
+        if (res.items.some(function (it) { return it.code === "incomplete"; })) info = "Has empty places for the student to fill.";
+        else if (res.correct) warn = "The initial answer is already the correct answer. Left as it is, it counts as no answer - the student must change it.";
+        else if (matchedOf(res) >= 0) info = "The initial answer is common mistake " + (matchedOf(res) + 1) + " - for a 'find the error' exercise. Left as it is, it counts as no answer.";
+        else info = "Changed and submitted as it is, it would get " + res.grade + "%. Left untouched, it counts as no answer.";
+    }
+    $("initInfo").textContent = info;
+    $("initWarn").textContent = warn;
+
+    /* the mistake being typed: what the checker says without a mistake entry */
+    $("misTry").textContent = "";
+    $("misWarn").textContent = "";
+    if (!kbEmpty(keyboards.mistakeHost)) {
+        const auto = grade(keyboards.mistakeHost.getAST(), Object.assign({}, rules, { mistakes: [] }));
+        if (auto.correct) $("misWarn").textContent = "This answer is correct (it equals the reference with the rules of tab 2): as a mistake it would never be matched.";
+        else $("misTry").textContent = "The automatic check without a mistake entry: " + auto.grade + "% - " + errorMessages(auto);
+        typeset($("misTry"));
+    }
+
+    /* the list: each mistake checked as a student answer */
+    $("misTable").innerHTML = !MISTAKES.length
+        ? "<tr><td class='hint'>No common mistakes yet. Type a wrong answer above and add it - or, in the Checker tab, save a student answer as a mistake.</td></tr>"
+        : "<tr><th>#</th><th>wrong answer</th><th>message</th><th>grading</th><th>check</th><th></th></tr>" + MISTAKES.map(function (m, i) {
+            const res = grade(m.answer, rules), hit = matchedOf(res);
+            let status;
+            if (hit === i) {
+                const cat = (res.items[0] || {}).category, own = m.grading.slice(4);
+                status = "<span class='yes'>✓ matched</span> · " + res.grade + "%" +
+                    (m.grading !== "points" && cat && cat !== own ? " <span class='hint'>(graded as " + esc(cat) + ": the rubric has no rule for " + esc(own) + ")</span>" : "");
+            } else if (res.correct) status = "<span class='no'>equals the correct answer - never matched</span>";
+            else if (hit >= 0) status = "<span class='no'>mistake " + (hit + 1) + " matches first</span>";
+            else status = "<span class='no'>not matched</span> · " + res.grade + "%";
+            const button = function (act, text, title, off) {
+                return "<button type='button' data-act='" + act + "' data-i='" + i + "' title='" + title + "'" + (off ? " disabled" : "") + ">" + text + "</button>";
+            };
+            return "<tr" + (i === editingMistake ? " class='editing'" : "") + "><td>" + (i + 1) + "</td><td class='math'>\\(" + m.latex + "\\)</td><td>" +
+                (m.message.trim() ? esc(m.message) : "<span class='hint'>(none - the default text)</span>") + "</td><td>" + esc(gradingText(m)) +
+                "</td><td>" + status + "</td><td class='acts'>" + button("up", "↑", "Earlier: checked before the ones below", i === 0) +
+                button("down", "↓", "Later", i === MISTAKES.length - 1) + button("edit", "Edit", "Into the keyboard above") +
+                button("del", "✕", "Delete") + "</td></tr>";
+        }).join("");
+    typeset($("misTable"));
+}
+
+/* ============================================================
+   4. THE EXERCISE FILE - keyboard + reference answer + rules + rubric in one JSON file (open / save as in the
    chemistry builder: the file picker where the browser has it, else a download / a file input)
    ============================================================ */
 const FILE_FORMAT = "mathCheck-exercise";
@@ -957,13 +1248,15 @@ function exercisePackage() {
         referenceUnit: keyboards.refHost.getUnit() || null,       // the reference's unit (getUnit()), null: none asked
         rules: withoutDefaults(readRules(), MathCheck.defaults.rules),
         rubric: rubric,
-        question: readQuestionSettings(),                           // tab 4: the question code's settings
+        initial: initialOf(),                                       // tab 3: the answer the student starts from, null: none
+        question: readQuestionSettings(),                           // tab 5: the question code's settings
         playground: {
             keyboardSettings: KB,
             referenceEditor: keyboards.refHost.getEditorAST(),
             studentEditor: keyboards.stuHost.getEditorAST(),
             referenceUnit: unitOf("refHost"),
-            studentUnit: unitOf("stuHost")
+            studentUnit: unitOf("stuHost"),
+            mistakeEditors: MISTAKES.map(function (m) { return m.editor; })   // to edit rules.mistakes again
         }
     };
 }
@@ -1071,6 +1364,9 @@ function loadPackage(pkg, name, handle) {
         loadEditor("stuHost", p.studentEditor);
         /* 3. the rules, the rubric, the feedback language */
         writeRules(pkg.rules);
+        /* the didactics: the initial answer, the mistakes */
+        loadEditor("initHost", pkg.initial && pkg.initial.editor);
+        loadMistakes(pkg.rules && pkg.rules.mistakes, p.mistakeEditors);
         /* the file's rubric is the whole table (its categories replace the defaults, as in compare) */
         rubricToUi(Object.assign({}, MathCheck.defaults.rubric, pkg.rubric || {}));
         syncRubricJson();
@@ -1121,6 +1417,8 @@ function newExercise() {
         refreshChecker();
         keyboards.refHost.clearAll();          // AC: the answer and its unit
         keyboards.stuHost.clearAll();
+        keyboards.initHost.clearAll();
+        loadMistakes([], []);
         writeRules({});
         rubricToUi(MathCheck.defaults.rubric);
         syncRubricJson();
@@ -1146,6 +1444,8 @@ function showFileTab() {
         ["Keyboard", keyboardSummary(KB)],
         ["Reference answer", "\\(" + (keyboards.refHost.getLatex() || "\\text{(empty)}") + "\\)"],
         ["Rules", ruleKeys.length ? "differ from the defaults: " + ruleKeys.join(", ") : "the defaults"],
+        ["Initial answer", pkg.initial ? "\\(" + pkg.initial.latex + "\\)" : "none - an empty box"],
+        ["Common mistakes", MISTAKES.length ? MISTAKES.map(function (m) { return "\\(" + m.latex + "\\)"; }).join(" · ") : "none"],
         ["Rubric", Object.keys(pkg.rubric.categories || {}).map(function (c) {
             const r = pkg.rubric.categories[c];
             return c + " " + (typeof r === "number" ? r : r.mode + (r.mode !== "none" ? " " + r.points : ""));
@@ -1223,7 +1523,7 @@ $("saveAsBtn").addEventListener("click", function () { saveFile(true); });
 $("copyPackage").addEventListener("click", function () { copyFrom("packageJson", "copyPackageMsg"); });
 
 /* ============================================================
-   4. THE QUESTION CODE - the exercise as a Moodle STACK question (STACK-JS) or a stand-alone page. All the
+   5. THE QUESTION CODE - the exercise as a Moodle STACK question (STACK-JS) or a stand-alone page. All the
    student-side code is in mathQuestion.js; here only the configuration and a fixed template, as in the chemistry
    builder (chemistryLib/STACKJS-DESIGN.md). The configuration holds the whole exercise package, so the code opens here
    again (Open… in tab 3).
@@ -1531,6 +1831,9 @@ window.playground = {
     loadPackage: function (pkg) { loadPackage(pkg, "test.json", null); },
     questionCode: function () { return $("qCode").value; },
     get tryKeyboard() { return tryRun && tryRun.keyboard; },
+    get initial() { return keyboards.initHost; },
+    get mistakeKeyboard() { return keyboards.mistakeHost; },
+    mistakes: function () { return MISTAKES; },
     openText: function (text, name) { openText(text, name || "test.txt", null); }
 };
 setDirty(false);
@@ -1575,6 +1878,10 @@ function check() {
                 (it.penalty || "") + "</td><td>" + (it.kind === "error" ? it.counted : "") + "</td><td>" + esc(it.message) + "</td></tr>";
         }).join("") + (result.items.length ? "" : "<tr><td colspan='6' class='hint'>No errors or notes.</td></tr>");
     typeset($("items"));
+    if (result.matched.mistake !== null && result.matched.mistake !== undefined) {
+        $("matched").textContent = "common mistake " + (result.matched.mistake + 1) + " (tab 3) · version " + result.version;
+    }
+    renderDidactics(rules, rubric);
 
     /* the ladder */
     const step = result.matched.equivalence;

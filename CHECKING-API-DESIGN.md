@@ -271,6 +271,26 @@ mistakes: [ { answer: <semantic AST>, message: { he, en, ar }, category: "value"
 - Order: correct answers → teacher mistakes → automatic diagnosis → generic "wrong value".
 - `points`: a grade for this specific mistake (partial credit) instead of the rubric's penalty.
 
+**Built in 0.11.0 (2026-10-31):**
+- **Any kind of answer.** `matchMistakes` runs in `compareWith` after the references, when the best one still has an
+  error other than `incomplete`. Each mistake is compared as if it were the reference (`compareOne`), and the first
+  one with no errors matches. The form checks and the units are left out: `x(x+2)` matches the mistake `x²+2x`. The
+  match replaces all items with one `teacher-mistake` error, and `result.matched.mistake` is its index.
+- **One rubric.** A mistake is graded by the rubric of the exercise:
+  - `category` names the category whose penalty it takes. Without one, it takes `mistake`'s.
+  - A category the rubric has no rule for counts as `mistake` (`errorCategory`).
+  - `points` gives a fixed grade instead.
+- **The message.** Shown in the feedback language when it has one, else in English, else in the language it has.
+  Without any message, the default text `teacher-mistake` is shown ("This is a common mistake…").
+- **The playground's tab 3, Didactics:**
+  - The correct answer, read-only.
+  - The initial answer, saved as `exercise.initial = { editor, latex }`. mathQuestion.js 1.1.0 starts from it, and an
+    untouched initial answer saves no state, so it gets no grade.
+  - The mistakes, typed with a keyboard, with an English message and a grading (a category or a fixed grade). Each row
+    shows whether the mistake matches; a mistake equal to the correct answer, or one hidden by an earlier mistake, is flagged.
+  - The playground keeps the mistakes' editor ASTs in `playground.mistakeEditors`.
+  - Translation into he / ar is deferred; the message object already has room for them.
+
 ### 3.11 Automatic diagnosis of a wrong value (cheap checks, ANSWER-CHECKING 5.7)
 | Check | Code |
 |---|---|

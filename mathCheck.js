@@ -30,7 +30,10 @@
    bounds, body, indexVariable */
 /* 0.10.0 (2026-10-30): ∫ - computed when definite with finite limits (adaptive Simpson), compared part by part;
    rules.structures.integrandInRange */
-const VERSION = "0.10.0";
+/* 0.11.0 (2026-10-31): teacher mistakes matched for every kind of answer (not only a wrong expression value), after
+   the references; a mistake's own rubric category (mistake.category); its message in another language when the
+   feedback language has none */
+const VERSION = "0.11.0";
 
 /* ============================================================
    DEFAULTS
@@ -91,7 +94,7 @@ const DEFAULT_RULES = {
         integrandInRange: true           // ∫ with limits: the integrand compared only between them (|x| = x on [0, 1]); false: everywhere
     },
     diagnosis: true,
-    mistakes: [],
+    mistakes: [],                        // [{ answer, message: { en, he, ar }, category, points }] - matchMistakes
     feedback: {
         showPenalties: true,
         showNotes: true,
@@ -1258,6 +1261,7 @@ const TEXT = {
         "incomplete": "The answer is not complete: fill in every empty place.",
         "answer-type": "The answer should be {expected}, but it is {actual}.",
         "wrong-value": "The value of the answer is not correct.",
+        "teacher-mistake": "This is a common mistake. Check your answer again.",
         "not-evaluated": "Work out {what} in the answer and write the result.",
         "domain-only": "The equation is equivalent to the expected one only when \\({condition}\\).",
         "missing-solution": "A solution is missing.",
@@ -1375,6 +1379,7 @@ const TEXT = {
         "incomplete": "התשובה אינה שלמה: יש למלא את כל המקומות הריקים.",
         "answer-type": "התשובה צריכה להיות {expected}, אך היא {actual}.",
         "wrong-value": "ערך התשובה אינו נכון.",
+        "teacher-mistake": "זו טעות נפוצה. יש לבדוק שוב את התשובה.",
         "not-evaluated": "יש לחשב את {what} שבתשובה ולכתוב את התוצאה.",
         "domain-only": "המשוואה שקולה למשוואה הנדרשת רק כאשר \\({condition}\\).",
         "missing-solution": "חסר פתרון.",
@@ -1492,6 +1497,7 @@ const TEXT = {
         "incomplete": "الإجابة غير كاملة: املأ كل الأماكن الفارغة.",
         "answer-type": "يجب أن تكون الإجابة {expected}، لكنها {actual}.",
         "wrong-value": "قيمة الإجابة غير صحيحة.",
+        "teacher-mistake": "هذا خطأ شائع. راجع إجابتك مرة أخرى.",
         "not-evaluated": "احسب {what} في الإجابة واكتب النتيجة.",
         "domain-only": "المعادلة مكافئة للمعادلة المطلوبة فقط عندما \\({condition}\\).",
         "missing-solution": "ينقص حل.",
@@ -2863,20 +2869,9 @@ function plusMinusPartial(s, r, ctx, add, state) {
     return false;
 }
 
-/* a wrong expression value: a teacher mistake, then the automatic diagnosis, then "wrong value" */
+/* a wrong expression value: the automatic diagnosis, then "wrong value" (the teacher's mistakes: matchMistakes) */
 function diagnoseWrongValue(s, r, eq, ctx, add, state) {
     const rules = ctx.rules;
-
-    for (let m = 0; m < (rules.mistakes || []).length; m += 1) {
-        const mistake = rules.mistakes[m];
-        const mAns = answerOf(parseInput(mistake.answer));
-        if (mAns && expressionsEqual(s, mAns, ctx).equal) {
-            state.matchedMistake = m;
-            add("error", "teacher-mistake", { message: mistake.message, points: mistake.points }, [s]);
-            return;
-        }
-    }
-
     const tol = rules.value.tolerance;
     if (rules.diagnosis !== false && eq.rows && eq.rows.length >= (eq.vars && eq.vars.length ? 3 : 1) && !usesPlusMinus(s) && !usesPlusMinus(r)) {
         const rows = eq.rows;                             // values: [reference, student]
@@ -2930,6 +2925,16 @@ function categoryRule(rubric, cat) {
     return r;
 }
 
+/*
+ * The category an error item is graded in. A teacher mistake with its own category (mistake.category: "sign",
+ * "bounds"...) takes that category's penalty - when the rubric (or the defaults) has a rule for it, else "mistake".
+ */
+function errorCategory(e, rubric) {
+    const own = e.code === "teacher-mistake" && e.params.category;
+    if (own && (categoryRule(rubric, own) || CATEGORY_DEFAULTS[own] || rubric.fatal.indexOf(own) >= 0)) return own;
+    return rubricCategory(e.code, rubric);
+}
+
 function applyRubric(raw, rubric) {
     const errors = raw.items.filter(function (it) { return it.kind === "error"; });
     const penalties = [];
@@ -2937,11 +2942,11 @@ function applyRubric(raw, rubric) {
 
     /* fatal: grade 0 */
     const fatal = errors.filter(function (e) {
-        return rubric.fatal.indexOf(CATEGORY_OF[e.code] || e.code) >= 0 || rubric.fatal.indexOf(rubricCategory(e.code, rubric)) >= 0;
+        return rubric.fatal.indexOf(CATEGORY_OF[e.code] || e.code) >= 0 || rubric.fatal.indexOf(errorCategory(e, rubric)) >= 0;
     });
     if (fatal.length) {
         errors.forEach(function (e) { e.counted = fatal.indexOf(e) >= 0; e.penalty = 0; });
-        return { grade: 0, penalties: [{ category: rubricCategory(fatal[0].code, rubric), points: rubric.start, count: fatal.length, capped: false, fatal: true }] };
+        return { grade: 0, penalties: [{ category: errorCategory(fatal[0], rubric), points: rubric.start, count: fatal.length, capped: false, fatal: true }] };
     }
 
     /* a teacher mistake with its own points: that grade */
@@ -2949,12 +2954,14 @@ function applyRubric(raw, rubric) {
     if (mistake) {
         mistake.counted = true;
         mistake.penalty = rubric.start - mistake.params.points;
-        return { grade: Math.max(rubric.minimum, Math.round(mistake.params.points)), penalties: [{ category: "mistake", points: mistake.penalty, count: 1, capped: false }] };
+        mistake.category = errorCategory(mistake, rubric);
+        return { grade: Math.max(rubric.minimum, Math.round(mistake.params.points)), penalties: [{ category: mistake.category, points: mistake.penalty, count: 1, capped: false }] };
     }
 
     const byCategory = {};
     errors.forEach(function (e) {
-        const cat = rubricCategory(e.code, rubric);
+        /* a teacher mistake in its own category (mistake.category), else "mistake" */
+        const cat = errorCategory(e, rubric);
         e.category = cat;
         (byCategory[cat] = byCategory[cat] || []).push(e);
     });
@@ -2996,9 +3003,12 @@ function buildFeedback(raw, graded, rules, language, reference) {
     const notes = raw.items.filter(function (it) { return it.kind === "note"; });
     let n = 0;
     const message = function (it) {
+        /* a teacher mistake: its message in the feedback language, else in English, else in the language it has */
         if (it.code === "teacher-mistake") {
             const m = it.params.message || {};
-            return typeof m === "string" ? m : (m[lang] || m.en || feedbackText("wrong-value", lang, {}, custom));
+            if (typeof m === "string" && m.trim()) return m;
+            const other = ["en", "he", "ar"].filter(function (l) { return m[l] && String(m[l]).trim(); })[0];
+            return (m[lang] && String(m[lang]).trim()) ? m[lang] : other ? m[other] : feedbackText("teacher-mistake", lang, {}, custom);
         }
         const params = Object.assign({}, it.params);
         if (params.detail) params.detail = TEXT[lang][params.detail] || params.detail;
@@ -3091,6 +3101,31 @@ function compare(student, reference, rules, rubric, options) {
     }
 }
 
+/*
+ * The teacher's mistakes (rules.mistakes), in their order: the first the student's answer equals - compared as with a
+ * reference, by value and the equivalence laws; the form checks and the units are left out (x(x+2) is the mistake
+ * x² + 2x). The raw items of that match - one teacher-mistake error - or null.
+ */
+function matchMistakes(s, R, options) {
+    const list = R.mistakes || [];
+    if (!list.length) return null;
+    const rules = Object.assign({}, R, { mistakes: [], form: {} });
+    const formOnly = function (it) { return it.kind !== "error" || ["form", "commaList"].indexOf(CATEGORY_OF[it.code]) >= 0; };
+    for (let m = 0; m < list.length; m += 1) {
+        const mistake = list[m];
+        const answer = parseInput(mistake && mistake.answer);
+        if (!answerOf(answer)) continue;
+        const raw = compareOne(s, answer, rules, Object.assign({}, options, { studentUnit: null, referenceUnit: null }), null);
+        if (!raw.items.every(formOnly)) continue;
+        const params = { message: mistake.message, points: mistake.points };
+        if (mistake.category) params.category = mistake.category;
+        /* (the equivalence found was with the mistake, not with the reference: not reported) */
+        return { items: [{ kind: "error", code: "teacher-mistake", params: params, nodes: [answerOf(s)].filter(Boolean) }],
+            state: { valueRight: false, matchedMistake: m, equivalence: null } };
+    }
+    return null;
+}
+
 function compareWith(student, reference, rules, rubric, options) {
     options = options || {};
     const R = merge(DEFAULT_RULES, rules || {});
@@ -3117,6 +3152,14 @@ function compareWith(student, reference, rules, rubric, options) {
         const graded = applyRubric(raw, B);
         if (!best || graded.grade > best.graded.grade) best = { raw: raw, graded: graded, index: index, debug: debug, ref: ref };
     });
+    /* not right with any reference: one of the teacher's mistakes? (CHECKING-API-DESIGN 3.10) */
+    if (best.raw.items.some(function (it) { return it.kind === "error" && it.code !== "incomplete"; })) {
+        const m = matchMistakes(s, R, options);
+        if (m) {
+            best.raw = m;
+            best.graded = applyRubric(m, B);
+        }
+    }
 
     const feedback = buildFeedback(best.raw, best.graded, R, language, best.ref);
     const items = best.raw.items.map(function (it) {

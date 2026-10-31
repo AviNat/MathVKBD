@@ -5,14 +5,15 @@
 /*
  * MathQuestion - a math keyboard question in Moodle STACK (STACK-JS) or in any other system (version MathQuestion.version).
  *
- * All student-side code is here; the playground (mathCheckPlayground.html, tab "4. Question code") generates only the
+ * All student-side code is here; the playground (mathCheckPlayground.html, tab "5. Question code") generates only the
  * configuration and a fixed template, as the chemistry builder does (chemistryLib/STACKJS-DESIGN.md):
  *
  *   MathQuestion.mountStackJs(stack_js, config)       inside a STACK [[iframe]] - loads MathJax itself
  *   MathQuestion.mount(element, config, options)      any other system (the page loads MathJax 3 with [tex]/html)
  *     options.state     the saved state (an object or its JSON text) or null
  *     options.readOnly  true: the review - the submitted answer with its grade and feedback
- *     options.onChange  function (state, score) after every change; state null when the answer is emptied
+ *     options.onChange  function (state, score) after every change; state null when the answer is emptied - or is
+ *                       the initial answer again (not an answer: nothing to grade)
  *
  * Needs, loaded before it: fullKbdLib-v4.js (MoodleMathKeyboard) and mathCheck.js (MathCheck).
  *
@@ -23,7 +24,9 @@
  *     inputs: { score: "ans1", state: "ans2" }   - the STACK inputs (STACK-JS only)
  *     displayChars                               - the answer box's width in characters; none = the whole width
  *     mathJaxUrl                                 - STACK-JS only; default MathJax 3 from jsDelivr
- *     exercise: the playground's exercise package (.mchk): keyboard, reference, referenceUnit, rules, rubric, language }
+ *     exercise: the playground's exercise package (.mchk): keyboard, reference, referenceUnit, rules, rubric, language,
+ *               initial: { editor, latex } - the answer the student starts from (part of it to complete, or one to
+ *               correct; the playground's Didactics tab), none: an empty box }
  *
  * The saved state (what onChange gets; in the STACK string input encoded: "mq1:" + base64 of the JSON, see encodeState):
  *   { v: 1, latex, editor, unit: { value, scale } | null, grade, feedback }
@@ -34,7 +37,7 @@
 (function (global) {
 "use strict";
 
-const VERSION = "1.0.2";
+const VERSION = "1.1.0";        // 1.1.0 (2026-10-31): exercise.initial - the answer the student starts from
 const MATHJAX_URL = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
 
 const TEXT = {
@@ -147,6 +150,7 @@ function runQuestion(host, cfg, adapter) {
         : (supported(cfg.language) || supported(ex.language) || "en");
     const review = adapter.review === true;
     const saved = adapter.state || null;
+    const initial = ex.initial && ex.initial.editor ? ex.initial : null;
 
     host.textContent = "";
     host.dir = lang === "en" ? "ltr" : "rtl";
@@ -172,7 +176,7 @@ function runQuestion(host, cfg, adapter) {
         physicalKeyboard: !review,
         onChange: function () {
             if (restoring || review || typeof adapter.save !== "function") return;
-            if (isEmpty(keyboard)) { adapter.save(null, 0); return; }
+            if (isEmpty(keyboard) || isInitial(keyboard)) { adapter.save(null, 0); return; }
             const result = check(keyboard);
             const score = Math.round(result.grade * 100) / 10000;
             adapter.save({
@@ -186,7 +190,13 @@ function runQuestion(host, cfg, adapter) {
     if (cfg.displayChars > 0) kbConfig.displayChars = cfg.displayChars;
     const keyboard = new global.MoodleMathKeyboard(kbConfig);
 
+    /* the initial answer, untouched (or typed back as it was), is not an answer: no grade for doing nothing */
+    function isInitial(k) {
+        return !!initial && typeof initial.latex === "string" && k.getLatex() === initial.latex && !k.getUnit();
+    }
+
     if (saved && saved.editor) restoreEditor(keyboard, saved.editor);
+    else if (!saved && initial && !review) restoreEditor(keyboard, initial.editor);
     if (saved && saved.unit && saved.unit.value) keyboard.selectUnit(saved.unit);
     restoring = false;
 

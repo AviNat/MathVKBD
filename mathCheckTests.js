@@ -523,6 +523,18 @@ const CASES = [
     { group: "Mistakes", name: "a teacher mistake with points", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "The derivative of x² is 2x, not x²." }, points: 30 }] }, expect: { grade: 30, codes: ["teacher-mistake"], feedbackIncludes: "not x²" } },
     { group: "Mistakes", name: "a teacher mistake matched by value", ref: "(* 2 x)", student: "(* x x)", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "x² again" } }] }, expect: { grade: 0, codes: ["teacher-mistake"] } },
     { group: "Mistakes", name: "several references: the best counts", refs: ["(+ x 1)", "(* 2 x)"], student: "(* x 2)", expect: { grade: 100, reference: 1 } },
+    /* 0.11.0: every kind of answer, the mistake's own category, the message in another language */
+    { group: "Mistakes", name: "the right answer wins over a mistake", ref: "(* 2 x)", student: "(* x 2)", rules: { mistakes: [{ answer: "(^ x 2)" }] }, expect: { grade: 100, codes: [] } },
+    { group: "Mistakes", name: "an equation mistake with points", ref: "x ‖ 2", student: "x ‖ 3", rules: { mistakes: [{ answer: "x ‖ 3", message: { en: "3 is the value of y." }, points: 40 }] }, expect: { grade: 40, codes: ["teacher-mistake"], feedbackIncludes: "value of y" } },
+    { group: "Mistakes", name: "an equation mistake, sides swapped", ref: "x ‖ 2", student: "3 ‖ x", rules: { mistakes: [{ answer: "x ‖ 3" }] }, expect: { grade: 0, codes: ["teacher-mistake"] } },
+    { group: "Mistakes", name: "a set mistake: one solution only", ref: "set{1, 5}", student: "set{5}", rules: { mistakes: [{ answer: "set{5}", message: { en: "x = 1 is a solution too." } }] }, expect: { grade: 0, codes: ["teacher-mistake"], feedbackIncludes: "solution too" } },
+    { group: "Mistakes", name: "a Σ mistake in the category bounds", ref: SUM10, student: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", rules: { mistakes: [{ answer: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", category: "bounds" }] }, expect: { grade: 75, codes: ["teacher-mistake"] } },
+    { group: "Mistakes", name: "a category the rubric does not set: as mistake", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(^ x 2)", category: "sign" }] }, expect: { grade: 0, codes: ["teacher-mistake"] } },
+    { group: "Mistakes", name: "the mistake's form checks left out", ref: "(* 2 x)", student: "(* x (+ x 2))", rules: { form: { expanded: "error" }, mistakes: [{ answer: "(+ (^ x 2) (* 2 x))" }] }, expect: { codes: ["teacher-mistake"] } },
+    { group: "Mistakes", name: "an incomplete answer is not a mistake", ref: "(* 2 x)", student: "(^ x ?)", rules: { mistakes: [{ answer: "(^ x 2)" }] }, expect: { grade: 0, codes: ["incomplete"] } },
+    { group: "Mistakes", name: "Hebrew feedback, the message in English only", ref: "(* 2 x)", student: "(^ x 2)", language: "he", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "Not x squared." } }] }, expect: { feedbackIncludes: "Not x squared." } },
+    { group: "Mistakes", name: "no message: the default text", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "" } }] }, expect: { feedbackIncludes: "common mistake" } },
+    { group: "Mistakes", name: "the first matching mistake counts", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(* x x)", points: 20 }, { answer: "(^ x 2)", points: 60 }] }, expect: { grade: 20, codes: ["teacher-mistake"] } },
 
     /* rubric and feedback */
     { group: "Rubric", name: "a category set to none: shown, not graded", ref: "(/ 3 4)", student: "(/ 6 8)", rules: FORM("reducedFractions"), rubric: { categories: { value: 100, form: { mode: "none" } } }, expect: { grade: 100, codes: ["fraction-not-reduced"] } },

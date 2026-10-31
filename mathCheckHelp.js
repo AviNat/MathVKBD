@@ -451,10 +451,11 @@ const SECTIONS = [
             ]
         },
         {
-            id: "mistakes", path: "rules.mistakes", values: "[{ answer, message: { en, he, ar }, points }]",
-            text: { en: "Wrong answers the teacher expects, each with its own message and, optionally, its own grade. A student's answer with the same value gets that message." },
+            id: "mistakes", path: "rules.mistakes", values: "[{ answer, message: { en, he, ar }, category, points }]",
+            text: { en: "Wrong answers the teacher expects (the playground's tab 3), each with its own message. Checked when the answer is not right, for any kind of answer: the first mistake the answer equals - by value and the equivalence laws, in any form - gives its message instead of the automatic feedback. Graded by the one rubric: the penalty of the mistake's category (\"mistake\" unless set; a category the rubric has no rule for counts as \"mistake\"), or its own fixed grade (points). A message missing in the feedback language is shown in English (or the language it has)." },
             examples: [
-                { caption: "x² for (x²)′ = 2x, a teacher mistake worth 30", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "The derivative of x² is 2x, not x²." }, points: 30 }] }, expect: { grade: 30, codes: ["teacher-mistake"] } }
+                { caption: "x² for (x²)′ = 2x, a teacher mistake worth 30", ref: "(* 2 x)", student: "(^ x 2)", rules: { mistakes: [{ answer: "(^ x 2)", message: { en: "The derivative of x² is 2x, not x²." }, points: 30 }] }, expect: { grade: 30, codes: ["teacher-mistake"] } },
+                { caption: "Σ to 11 for Σ to 10, a mistake in the category bounds (each 25)", ref: "sum<indexVariable=k start=1 end=10 body=(^ k 2)>", student: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", rules: { mistakes: [{ answer: "sum<indexVariable=k start=1 end=11 body=(^ k 2)>", message: { en: "Stop the sum at 10." }, category: "bounds" }] }, expect: { grade: 75, codes: ["teacher-mistake"] } }
             ]
         }
     ]
