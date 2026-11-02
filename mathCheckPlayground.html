@@ -142,8 +142,9 @@ details > summary h2 { display: inline; }
     <br><span id="sources">Loading the libraries…</span></span>
   <a href="mathCheckHelp.html" target="_blank" rel="noopener" style="color:#fff;font-weight:600;margin-inline-start:auto"
      title="What each rule and rubric element does, with examples">Help: rules &amp; rubric ↗</a>
-  <label style="margin-inline-start:0">Feedback language
-    <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option></select>
+  <label style="margin-inline-start:0" title="Everything the student sees: the keyboard's tooltips and the feedback. System: the language Moodle shows the page in, so one copy of the question serves all languages.">Student language
+    <select id="language"><option value="en">English</option><option value="he">עברית</option><option value="ar">العربية</option><option value="system">System (Moodle's language)</option></select>
+    <span id="languageSystemNote" hidden>- previewed here in English</span>
   </label>
 </header>
 <nav class="tabs" role="tablist">
@@ -243,8 +244,6 @@ details > summary h2 { display: inline; }
       <label class="check" style="grid-column:1/-1"><input type="radio" name="qTarget" value="stack" checked> Moodle STACK question (STACK-JS)</label>
       <label class="check" style="grid-column:1/-1"><input type="radio" name="qTarget" value="html"> Stand-alone page (any website or system)</label>
       <label>Question name <input type="text" id="qId" size="16" value="question1"></label>
-      <label title="system: the language Moodle shows the page in, so one copy of the question serves all languages">Student language
-        <select id="qLanguage"><option value="exercise">the feedback language (top right)</option><option value="system">system: the page's language</option></select></label>
       <div class="q-row"><label title="About this many characters fit on one line of the answer box; longer answers scroll. Empty: the whole width of the page (or the STACK frame). Never wider than the page.">Answer box width (characters)
         <input type="number" id="qDisplayChars" min="8" max="200" step="1" placeholder="whole width" style="width:110px"></label></div>
       <div class="q-row">Review:
@@ -592,7 +591,7 @@ function codeText(rules, rubric, reference) {
         "",
         "// student: the student's keyboard.getAST() (an object or its JSON text)",
         "function checkAnswer(student) {",
-        "    const result = MathCheck.compare(student, reference, rules, rubric, { language: \"" + $("language").value + "\" });",
+        "    const result = MathCheck.compare(student, reference, rules, rubric, { language: \"" + previewLanguage() + "\" });",
         "    // result.grade: 0-100; result.feedback: text with \\( \\) LaTeX; result.items: the errors and notes",
         "    return result;",
         "}",
@@ -690,7 +689,6 @@ function typeset(el) {
 /* every option of the keyboard library, by its path in the configuration */
 const KB_GROUPS = [
     { title: "General", fields: [
-        { path: "language", label: "Language (tooltips)", type: "select", options: ["en", "he", "ar"] },
         { path: "multiplicationSymbol", label: "Multiplication sign", type: "select", options: ["cdot", "times"] },
         { path: "logicNotation", label: "and / or shown as (symbols ∧ ∨, english AND OR, language: the keyboard's language)", type: "select", options: ["symbols", "english", "language"] },
         { path: "enableEquals", label: "The \"=\" key", type: "check" },
@@ -745,7 +743,7 @@ const KB_GROUPS = [
 
 /* the presets (the variables as text, as in the form) */
 const ALL_ON = {
-    language: "en", multiplicationSymbol: "cdot", logicNotation: "symbols", enableEquals: true, complexNumbers: true, sets: true,
+    multiplicationSymbol: "cdot", logicNotation: "symbols", enableEquals: true, complexNumbers: true, sets: true,
     implicitMultiply: true, showImplicitMultiply: true, placeholderTooltips: true, fixedCalculusVariable: "",
     variables: "x, y, z, a, b, n, t, alpha", acceptLowercaseVariables: true, acceptUppercaseVariables: true,
     functions: { logarithmic: true, trigonometric: true, inverseTrigonometric: true, hyperbolic: true, inverseHyperbolic: true, namedFunction: true },
@@ -864,9 +862,18 @@ function parseVariables(text) {
         return GREEK[v] ? { id: v, label: GREEK[v], latex: "\\" + v } : { id: v, label: v, latex: v };
     });
 }
+/*
+ * The student language (2026-11-02, the user: one setting for everything the student sees - the keyboard's tooltips and
+ * the feedback): "en" | "he" | "ar" | "system" (the language Moodle shows the page in, mathQuestion.js). The playground
+ * itself is in TOOL_LANGUAGE, the teacher's language; a "system" question is previewed in it.
+ */
+const TOOL_LANGUAGE = "en";
+function previewLanguage() { return $("language").value === "system" ? TOOL_LANGUAGE : $("language").value; }
+
 /* the settings -> the keyboard library's configuration */
 function keyboardConfig(s) {
     const c = JSON.parse(JSON.stringify(s));
+    c.language = previewLanguage();                 // the tooltips: the student language, not a keyboard setting
     c.variables = parseVariables(s.variables);
     c.fixedCalculusVariable = (s.fixedCalculusVariable || "").trim() || null;
     return c;
@@ -1164,7 +1171,7 @@ function renderDidactics(rules, rubric) {
     $("didRef").textContent = refK.getLatex()
         ? "\\(" + refK.getLatex() + (refUnit ? "\\;\\text{" + refUnit + "}" : "") + "\\)" : "(empty - type it in the Checker tab)";
     typeset($("didRef"));
-    const options = { language: $("language").value, logicNotation: KB.logicNotation || "symbols" };
+    const options = { language: previewLanguage(), logicNotation: KB.logicNotation || "symbols" };
     /* an answer graded against the reference - with the reference's unit, so only the answer itself counts */
     const grade = function (ast, r) {
         return refUnit ? MathCheck.compare({ answer: ast, unit: refUnit }, { answer: ref, unit: refUnit }, r, rubric, options)
@@ -1341,6 +1348,10 @@ function loadPackage(pkg, name, handle) {
     if (!pkg || pkg.format !== FILE_FORMAT) throw new Error("This is not a mathCheck exercise file.");
     loading = true;
     try {
+        /* 0. the student language, before the keyboards (their tooltips) - older files: the feedback language, and
+           "system" in the question settings */
+        const language = pkg.question && pkg.question.language === "system" ? "system" : pkg.language || (pkg.keyboard && pkg.keyboard.language);
+        setLanguage(["en", "he", "ar", "system"].indexOf(language) >= 0 ? language : "en");
         /* 1. the keyboard: the playground's own settings, else made from the keyboard configuration */
         let settings = pkg.playground && pkg.playground.keyboardSettings;
         if (!settings) {
@@ -1370,7 +1381,6 @@ function loadPackage(pkg, name, handle) {
         /* the file's rubric is the whole table (its categories replace the defaults, as in compare) */
         rubricToUi(Object.assign({}, MathCheck.defaults.rubric, pkg.rubric || {}));
         syncRubricJson();
-        if (pkg.language) $("language").value = pkg.language;
         writeQuestionSettings(pkg.question);
     } finally {
         loading = false;
@@ -1398,7 +1408,12 @@ function changedByUser() { if (!loading) setDirty(true); }
     $(id).addEventListener("input", changedByUser);
     $(id).addEventListener("change", changedByUser);
 });
-$("language").addEventListener("change", changedByUser);
+/* the student language: the keyboards again (their tooltips), the feedback, the question code */
+function setLanguage(language) {
+    $("language").value = language;
+    $("languageSystemNote").hidden = language !== "system";
+}
+$("language").addEventListener("change", function () { setLanguage($("language").value); keyboardChanged(); changedByUser(); });
 window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 function confirmDiscard() { return !dirty || window.confirm("The exercise has unsaved changes. Discard them?"); }
 
@@ -1407,6 +1422,7 @@ function newExercise() {
     if (!confirmDiscard()) return;
     loading = true;
     try {
+        setLanguage("en");
         writeKbForm(preset("full"));
         KB = readKbForm();
         saveKbSettings();
@@ -1422,7 +1438,6 @@ function newExercise() {
         writeRules({});
         rubricToUi(MathCheck.defaults.rubric);
         syncRubricJson();
-        $("language").value = "en";
         writeQuestionSettings({});
     } finally {
         loading = false;
@@ -1450,7 +1465,7 @@ function showFileTab() {
             const r = pkg.rubric.categories[c];
             return c + " " + (typeof r === "number" ? r : r.mode + (r.mode !== "none" ? " " + r.points : ""));
         }).join(" · ")],
-        ["Feedback language", pkg.language],
+        ["Student language", pkg.language === "system" ? "system (Moodle's language)" : pkg.language],
         ["Versions", "keyboard " + (pkg.versions.keyboard || "?") + " · mathCheck " + pkg.versions.mathCheck]
     ];
     $("fileSummary").innerHTML = rows.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td></tr>"; }).join("");
@@ -1530,9 +1545,9 @@ $("copyPackage").addEventListener("click", function () { copyFrom("packageJson",
    ============================================================ */
 const QUESTION_TOOL = "mathCheck-question";
 /* written into the code's first comment, to see which template a question has - change it when the template changes */
-const QUESTION_CODE_VERSION = "2026-10-29.1 STACK-JS";
+const QUESTION_CODE_VERSION = "2026-11-02.1 STACK-JS";
 const QUESTION_DEFAULTS = {
-    target: "stack", questionId: "question1", language: "exercise", displayChars: 0,
+    target: "stack", questionId: "question1", displayChars: 0,
     review: { grade: true, feedback: true, reference: true },
     inputs: { score: "ans1", state: "ans2" },
     libraryUrl: "https://raw.githack.com/AviNat/MathVKBD/main/"
@@ -1544,7 +1559,6 @@ function readQuestionSettings() {
         target: target ? target.value : "stack",
         /* it goes into an HTML comment and a title: no < > & " and no -- */
         questionId: $("qId").value.trim().replace(/[<>&"\[\]{}]/g, "").replace(/-{2,}/g, "-") || "question1",
-        language: $("qLanguage").value,
         displayChars: Math.max(0, Math.round(Number($("qDisplayChars").value)) || 0),   // 0: the whole width
         review: { grade: $("qReviewGrade").checked, feedback: $("qReviewFeedback").checked, reference: $("qReviewReference").checked },
         inputs: { score: $("qScoreInput").value.trim(), state: $("qStateInput").value.trim() },
@@ -1555,7 +1569,6 @@ function writeQuestionSettings(q) {
     q = deepMerge(QUESTION_DEFAULTS, q || {});
     document.querySelectorAll("input[name=qTarget]").forEach(function (r) { r.checked = r.value === q.target; });
     $("qId").value = q.questionId;
-    $("qLanguage").value = q.language === "system" ? "system" : "exercise";
     $("qDisplayChars").value = q.displayChars > 0 ? q.displayChars : "";
     $("qReviewGrade").checked = q.review.grade !== false;
     $("qReviewFeedback").checked = q.review.feedback !== false;
@@ -1572,7 +1585,7 @@ function questionConfig(q) {
     delete pkg.question;
     const cfg = {
         tool: QUESTION_TOOL, formatVersion: 1, target: q.target, questionId: q.questionId,
-        language: q.language, review: q.review, inputs: q.inputs, exercise: pkg
+        language: pkg.language, review: q.review, inputs: q.inputs, exercise: pkg      // the student language (header)
     };
     if (q.displayChars > 0) cfg.displayChars = q.displayChars;
     return cfg;
@@ -1609,10 +1622,13 @@ function stackCode(q, cfg) {
 /* a stand-alone page: the keyboard with Submit / Try again, and in a comment how to connect it to another system */
 function htmlCode(q, cfg) {
     const json = JSON.stringify(cfg).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
-    const lang = cfg.exercise.language || "en";
+    const lang = cfg.language || "en";
     return [
         "<!DOCTYPE html>",
-        "<html lang=\"" + lang + "\" dir=\"" + (lang === "en" ? "ltr" : "rtl") + "\">",
+        /* system: no system here to ask - the browser's language */
+        lang === "system"
+            ? "<html>\n<script>(function (l) { l = /^(he|ar)/.test(l) ? l.slice(0, 2) : \"en\"; document.documentElement.lang = l; document.documentElement.dir = l === \"en\" ? \"ltr\" : \"rtl\"; })(navigator.language || \"\");<\/script>"
+            : "<html lang=\"" + lang + "\" dir=\"" + (lang === "en" ? "ltr" : "rtl") + "\">",
         "<head>",
         "<meta charset=\"utf-8\">",
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
@@ -1809,6 +1825,7 @@ $("saveQCode").addEventListener("click", saveQuestionCode);
 /* start (called at the end, after every declaration): the saved settings (else everything on), the checker with a
    first example: 2(x+1) and 2x+2 */
 function startUp() {
+setLanguage($("language").value);       // the browser may bring back the last choice
 KB = loadKbSettings();
 writeKbForm(KB);
 $("kbCode").value = keyboardCode(keyboardConfig(KB));
@@ -1860,7 +1877,7 @@ function check() {
     /* a unit chosen on the reference keyboard: both answers with their units */
     const refUnit = keyboards.refHost.getUnit();
     /* and / or in the feedback as on the student's keyboard (tab 1) */
-    const options = { language: $("language").value, logicNotation: KB.logicNotation || "symbols", debug: true };
+    const options = { language: previewLanguage(), logicNotation: KB.logicNotation || "symbols", debug: true };
     const result = refUnit
         ? MathCheck.compare({ answer: stu, unit: keyboards.stuHost.getUnit() || null }, { answer: ref, unit: refUnit }, rules, rubric, options)
         : MathCheck.compare(stu, ref, rules, rubric, options);
@@ -1869,7 +1886,7 @@ function check() {
     $("grade").style.color = result.grade === 100 ? "var(--ok)" : "var(--bad)";
     $("matched").textContent = "equivalence: " + (result.matched.equivalence || "by value only / none") + " · version " + result.version;
     $("feedback").textContent = result.feedback;
-    $("feedback").dir = $("language").value === "en" ? "ltr" : "rtl";
+    $("feedback").dir = previewLanguage() === "en" ? "ltr" : "rtl";
     typeset($("feedback"));
 
     $("items").innerHTML = "<tr><th>kind</th><th>code</th><th>category</th><th>penalty</th><th>counted</th><th>message</th></tr>" +

@@ -19,7 +19,9 @@
  *
  * The configuration:
  *   { tool: "mathCheck-question", formatVersion: 1, questionId,
- *     language: "exercise" (the exercise's feedback language) | "system" (the page's language) | "en" | "he" | "ar",
+ *     language: the student language - feedback and the keyboard's tooltips: "en" | "he" | "ar" | "system" (the page's
+ *               language: Moodle's); the playground writes the exercise's language here (since 2026-11-02);
+ *               "exercise" (older code): the exercise's language,
  *     review: { grade, feedback, reference }    - what the review shows (each true unless false)
  *     inputs: { score: "ans1", state: "ans2" }   - the STACK inputs (STACK-JS only)
  *     displayChars                               - the answer box's width in characters; none = the whole width
