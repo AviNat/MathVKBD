@@ -1726,13 +1726,13 @@ function stackHelpHtml(q) {
         "<table><tr><th></th><th>" + s + " - the score</th><th>" + t + " - the saved answer</th></tr>" +
         "<tr><td>Input type</td><td>Numerical</td><td>String</td></tr>" +
         "<tr><td>Model answer</td><td><code>1</code></td><td><code>" + STACK_MODEL_VAR + "</code> - from the question variables (below)</td></tr>" +
-        "<tr><td>Forbid float</td><td>Yes or No (the score is 0, 1 or a fraction such as 2/5)</td><td>-</td></tr>" +
+        "<tr><td>Forbid float</td><td><b>No</b></td><td>-</td></tr>" +
         "<tr><td>Student must verify</td><td>No</td><td>No</td></tr>" +
         "<tr><td>Show the validation</td><td><b>No</b></td><td><b>No</b></td></tr>" +
         "<tr><td>Extra options</td><td><code>hideanswer</code></td><td><code>hideanswer</code></td></tr></table>" +
         "<p><b>The potential response tree (PRT).</b> " + s + " holds the score from 0 to 1 (the rubric of tab 2), and the PRT gives it as the mark: " +
-        "feedback variables <code>sc: " + s + ";</code> and one node - SAns <code>" + s + "</code>, TAns <code>1</code>, answer test <code>NumAbsolute</code> " +
-        "with the option <code>0.0001</code>; true branch: score <code>1</code>; false branch: score <code>sc</code>. " + t + " needs no PRT: STACK saves it " +
+        "one node - SAns <code>" + s + "</code>, TAns <code>1</code>, answer test <code>AlgEquiv</code>; " +
+        "true branch: score <code>1</code>; false branch: score <code>" + s + "</code>. " + t + " needs no PRT: STACK saves it " +
         "and the keyboard reads it back. The feedback text is shown on the review page, inside the frame (the review options above).</p>" +
         "<p><b>Question variables.</b> Paste the line below into the question's <i>Question variables</i> (add it to any variables " +
         "already there). It is the reference answer of tab 2 as the keyboard saves it, so Moodle's <i>Fill in correct responses</i> shows it " +
